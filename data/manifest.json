@@ -24,6 +24,8 @@
     "featureLines": 10599,
     "waterBodies": 523,
     "props": 16032,
+    "places": 178,
+    "teleports": 29,
     "terrainTiers": 2
   },
   "files": {
@@ -70,6 +72,10 @@
     "props.bin": {
       "bytes": 192384,
       "sha256": "dcbf3c0b9f4a679dfa948fbc30ec09f0f5efe34142d9616000b9511f49193392"
+    },
+    "labels.json": {
+      "bytes": 78067,
+      "sha256": "fedaa02dacab0f4f5894a69fa55f8857f7891f0ce85dd3c5c1c38cb119c3aa7b"
     }
   },
   "attribution": [

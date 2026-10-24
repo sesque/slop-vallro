@@ -97,11 +97,25 @@ behind each step are in `spec.md` (section numbers in brackets).
 facade detail yet); about 2.5 M triangles in a typical view at 90 to 120 fps in the preview pane.*
 
 ## Phase 6 — UI, labels and gameplay adaptation (spec §5.7, §6)
-- [ ] `build-labels.mjs`: streets, house numbers, places; facilities become teleport points.
-- [ ] `town-map.js`: hillshade minimap, teleport, location label (replace `getLocationLabel`).
-- [ ] Update the HUD text, controls hints and spawn point (e.g. the Ajuntament square).
-- [ ] Lighting: latitude and sun direction for 41.5°N; tune the presets for a Mediterranean light.
-- [ ] Remove the remaining NYC modules and assets (boroughs, landmarks, highway traffic, NYC map).
+- [x] `build-labels.mjs` -> `data/labels.json`: 178 places (12 settlements, 86 farmhouses, 41 facilities, hills, passes, water),
+      131 street labels for 101 streets, 846 house numbers (771 attached to a building), and 29 curated teleport destinations
+      in five categories (village, leisure, stay & eat, farmhouses, hills) with a nearby street as sub-title.
+- [x] `town-map.js` + `geo/map-math.js`: a hillshaded relief (8 m per pixel) under the buildings, streets, tracks, pools and
+      streams; a minimap that follows the player; a full atlas with pan, zoom, accent-blind search, destination pins, a
+      waypoint, a scale bar and labels that appear by zoom level; click to teleport (inside the boundary only).
+- [x] HUD and gameplay (`town.js`, now the entry point; `main.js` only starts it): Vallromanes text everywhere, km/h and
+      metres above sea level, place + street name plates (white enamel, blue border), control hints, the teleport list built from
+      the labels, the camera list built from `CAMERA_PRESETS`, saved player state, spawn at the Ajuntament. Four vantage-point
+      cameras (village, el Pedró, the valley, the golf course) and the drone replace the New York ones. The taxi has a Spanish
+      plate and "TAXI" lettering.
+- [x] Lighting: `geo/sun.js` computes the sun for 41.54° N, 2.3° E on 15 September (CEST): midday 13:45 at 51°, golden hour
+      18:45 at 13° in the west-south-west, blue hour 20:10 (light kept 4° up), night with a fixed moon.
+- [x] NYC modules and assets removed: `boroughs`, `buildings` (NYC), `city-grid`, `city-config`, `landmarks`,
+      `nyc-geodata`, `nyc-map`, `street-details`, `road-paint`, `road-network`, `traffic`, `audio-system`, `audio-sources`,
+      their tests, the NYC data scripts and 15 MB of NYC raw data. `tsl-materials.js` went from 3 041 to 353 lines (what the car,
+      trees and lighting still use) and `controllers.js` lost its Manhattan bounds and sidewalks. The generic audio synthesis,
+      acoustics and events modules, `scene-culling`, `pedestrians`, `pedestrian-routes` and the bus model stay for phases 7 and 9.
+      README rewritten with the data credits.
 
 ## Phase 7 — Traffic and pedestrians (spec §6)
 - [ ] `road-graph.js`: a lane graph from `roads.json`; yield and priority at intersections; roundabouts if any.

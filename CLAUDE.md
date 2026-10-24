@@ -16,8 +16,8 @@ Read these before working:
 ## Ground rules
 
 - Keep the upstream architecture: static builders (`build*(scene)` returning a handle) and per-frame systems
-  (`update(dt, …)`) wired in `js/main.js`. Change the city-specific modules; keep the generic ones
-  (see `spec.md` §6).
+  (`update(dt, …)`) wired in `js/town.js` (started by `js/main.js`). The New York modules are gone; the generic ones
+  (lighting, cameras, controllers, post-processing, trees, actor models) are kept (see `spec.md` §6).
 - **Scope: the world is the whole municipality of Vallromanes** (INE 08296), not just the urban area covered by
   the BUE 1:1000. The BUE is the high-detail core; the rest (forest, farmland, Serralada de Marina slopes) comes
   from the ICGC DTM, RTT and OSM at lower detail. The municipal boundary polygon defines the playable extent and is a **hard edge** (player, vehicles and
@@ -38,8 +38,8 @@ Read these before working:
 
 ```bash
 npm run inventory   # report on raw BUE shapefiles
-npm run geodata     # bake boundary, roads, terrain and buildings → data/ (+ manifest.json); needs the raw data
+npm run geodata     # bake boundary, roads, stairs, terrain, buildings, features, props, labels → data/ (+ manifest.json); needs the raw data
 node tools/vallromanes/fetch-osm.mjs   # optional: OSM highways for oneway/lanes/maxspeed (network)
 npm test            # node tests (tests/*.test.*)
-npx serve .         # open http://localhost:3000 in a WebGPU browser; add ?terrain for the Vallromanes terrain demo
+npx serve .         # open http://localhost:3000 in a WebGPU browser
 ```

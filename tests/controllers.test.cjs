@@ -23,7 +23,6 @@ function keyboardHarness(nyc = {}) {
   const window = eventTarget();
   const document = { ...eventTarget(), hidden: false };
   const config = {
-    streetZ: () => 0,
     isTypingInField: (event) => ['INPUT', 'SELECT'].includes(event.target?.tagName),
     ...nyc
   };
@@ -31,12 +30,11 @@ function keyboardHarness(nyc = {}) {
     globals: { window, document },
     imports: {
       'three/webgpu': {},
-      './city-config.js': config,
+      './town-config.js': config,
       './tsl-materials.js': {},
       './actor-models.js': {},
       './pedestrians.js': {},
-      './vehicle-lights.js': {},
-      './landmarks.js': {}
+      './vehicle-lights.js': {}
     }
   });
   // Exercise the production event handlers without constructing the scene's 3D models.
@@ -193,14 +191,20 @@ for (const mode of ['Person', 'Car', 'Cyclist', 'Helicopter']) {
   });
 }
 
+// The world of these tests is a 1 km square whose east and west edges follow `shore` (like a river bank or a boundary)
+// and whose north edge is 30 m in: every mode is confined to it
 function teleportHarness(mode, colliders = [], shore = () => ({ westX: -500, eastX: 500 })) {
-  const harness = keyboardHarness({
-    ISLAND_BOUNDS: { minX: -500, maxX: 500, minZ: -500, maxZ: 500, sidewalkHeight: 0.22 },
-    CENTRAL_PARK_BOUNDS: { minX: 1000, maxX: 1100, minZ: 1000, maxZ: 1100 },
-    getIslandBoundsAtZ: shore,
-    blockAt: () => null
-  });
+  const harness = keyboardHarness();
   const { controller } = harness;
+  controller.setWorld({
+    groundHeight: () => 0,
+    bounds: { minX: -500, maxX: 500, minZ: -500, maxZ: 500 },
+    confine: (x, z) => {
+      const cz = Math.max(-470, Math.min(500, z));
+      const edge = shore(cz);
+      return { x: Math.max(edge.westX + 8, Math.min(edge.eastX - 8, x)), z: cz };
+    }
+  });
   const position = (x = 0, y = 0, z = 0) => ({ x, y, z, copy(p) { this.x = p.x; this.y = p.y; this.z = p.z; } });
   const pivot = () => ({ position: position(), rotation: { x: 0.1, y: 0, z: -0.2 } });
   const chase = { person: [4.3, 1.95], car: [6.9, 2.12], cyclist: [4.8, 2.05], helicopter: [11.4, 3.3] };
@@ -303,7 +307,7 @@ test('teleports use oriented building footprints without rejecting clear corners
   }
 });
 
-test('ground arrivals share movement shoreline limits while helicopters may remain above lower buildings', () => {
+test('ground arrivals share the movement limits of the world, and helicopters may remain above lower buildings', () => {
   const shore = z => ({ westX: -40 + z * 0.05, eastX: 40 + z * 0.05 });
   const { controller, ent } = teleportHarness('person', [], shore);
   const result = controller.teleportActiveTo(1000, -1000);
@@ -377,8 +381,8 @@ test('player clearance respects altitude and permits a ground arrival under an a
   assert.notDeepEqual({ ...controller.teleportActiveTo(0, 0) }, { x: 0, z: 0 }, 'a helicopter parked at street level must be avoided');
 });
 
-test('an installed world replaces Manhattan ground height and its bounds are a hard edge for every mode', () => {
-  const { controller } = keyboardHarness({ ISLAND_BOUNDS: { sidewalkHeight: 0.15 } });
+test('an installed world provides the ground height and its bounds are a hard edge for every mode', () => {
+  const { controller } = keyboardHarness();
   controller.setWorld({
     groundHeight: (x, z, mode) => 100 + x * 0.01 + (mode === 'person' ? 0.5 : 0),
     bounds: { minX: -50, maxX: 60, minZ: -70, maxZ: 80 }
@@ -415,7 +419,7 @@ function squareCollider(maxY = 8) {
 }
 
 test('outline colliders push a walking person out along the wall normal', () => {
-  const { controller } = keyboardHarness({ ISLAND_BOUNDS: { sidewalkHeight: 0.15 } });
+  const { controller } = keyboardHarness();
   controller.setWorld({ groundHeight: () => 0, bounds: { minX: -100, maxX: 100, minZ: -100, maxZ: 100 } });
   controller.colliders = [squareCollider()];
   controller._colliderCells = null;
@@ -429,7 +433,7 @@ test('outline colliders push a walking person out along the wall normal', () => 
 });
 
 test('outline colliders test the car with three circles along its body', () => {
-  const { controller } = keyboardHarness({ ISLAND_BOUNDS: { sidewalkHeight: 0.15 } });
+  const { controller } = keyboardHarness();
   controller.setWorld({ groundHeight: () => 0, bounds: { minX: -100, maxX: 100, minZ: -100, maxZ: 100 } });
   controller.colliders = [squareCollider()];
   controller._colliderCells = null;
@@ -445,7 +449,7 @@ test('outline colliders test the car with three circles along its body', () => {
 });
 
 test('a world confine function replaces the box edge', () => {
-  const { controller } = keyboardHarness({ ISLAND_BOUNDS: { sidewalkHeight: 0.15 } });
+  const { controller } = keyboardHarness();
   controller.setWorld({
     groundHeight: () => 0,
     bounds: { minX: -100, maxX: 100, minZ: -100, maxZ: 100 },
@@ -462,7 +466,7 @@ test('a world confine function replaces the box edge', () => {
 });
 
 test('vehicles tilt to the slope: nose up on a climb, the left side up when the ground rises to the left', () => {
-  const { controller } = keyboardHarness({ ISLAND_BOUNDS: { sidewalkHeight: 0.15 } });
+  const { controller } = keyboardHarness();
   const a = 0.2; // ground rises at about 11 degrees along +x
   controller.setWorld({ groundHeight: () => 0, bounds: { minX: -9, maxX: 9, minZ: -9, maxZ: 9 }, normalAt: () => [-Math.sin(a), Math.cos(a), 0] });
   const ent = (heading) => ({ position: { x: 0, z: 0 }, heading });

@@ -26,20 +26,37 @@ test('city module preloads start after the import map and before stylesheets', (
 
 test('native module entry and imports share canonical preloaded URLs on GitHub Pages', () => {
   const links = preloads.map((match) => match[1]);
-  assert.equal(links.length, 29);
   assert.equal(new Set(links).size, links.length, 'each module is preloaded once');
   assert.equal(entries.length, 1);
   assert.equal(entries[0][1], './js/main.js');
   assert.ok(links.includes(entries[0][1]));
   assert.equal([...html.matchAll(/<script\b/g)].length, 2, 'only the import map and native entry are needed');
-  const base = 'https://example.test/slop-newyork/';
+  const base = 'https://example.test/slop-vallro/';
   const urls = new Set(links.map((src) => new URL(src, base).href));
   for (const src of links) {
-    assert.match(src, /^\.\/js\/[\w-]+\.js$/, 'preloads use the same unversioned paths as native imports');
+    assert.match(src, /^\.\/js\/[\w-]+(\/[\w-]+)?\.js$/, 'preloads use the same unversioned paths as native imports');
     const source = readFileSync(join(__dirname, '..', src), 'utf8');
     for (const [, specifier] of source.matchAll(/(?:\bfrom\s*|\bimport\s*)['"](\.[^'"]+)['"]/g)) {
       const url = new URL(specifier, new URL(src, base));
       assert.ok(urls.has(url.href), `${src} imports an unpreloaded or mismatched URL: ${specifier}`);
     }
+  }
+});
+
+test('the preloads are exactly the modules reachable from the entry point', () => {
+  const reachable = new Set();
+  const visit = (src) => {
+    if (reachable.has(src)) return;
+    reachable.add(src);
+    const source = readFileSync(join(__dirname, '..', src), 'utf8');
+    for (const [, specifier] of source.matchAll(/(?:\bfrom\s*|\bimport\s*)['"](\.[^'"]+)['"]/g)) {
+      visit('./' + join('js', src.replace(/^\.\/js\//, '').replace(/[^/]*$/, ''), specifier).replace(/\\/g, '/'));
+    }
+  };
+  visit('./js/main.js');
+  assert.deepEqual([...preloads.map((m) => m[1])].sort(), [...reachable].sort(), 'no missing and no stale preloads');
+  assert.ok(reachable.size > 20);
+  for (const gone of ['city-config', 'nyc-geodata', 'boroughs', 'landmarks']) {
+    assert.ok(![...reachable].some((r) => r.includes(gone)), `${gone} is no longer loaded`);
   }
 });

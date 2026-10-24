@@ -1,6 +1,6 @@
 /* css/style.css */
-/* NYC HUD design system: quiet graphite glass in the corners of the screen, taxi yellow for whatever is active,
-   NYC DOT green for street names, so that the city itself stays the star */
+/* HUD design system: quiet graphite glass in the corners of the screen, yellow for whatever is active, white-and-blue
+   enamel plates for street names, so that the town itself stays the star */
 
 :root {
   /* Surfaces */
@@ -623,7 +623,7 @@ body.hud-minimized .icon-show {
 }
 
 /* ------------------------------------------------------------------------------------------------------------------
-   Bottom left: NYC street-name signs over the GPS radar
+   Bottom left: place and street name plates over the minimap
    ------------------------------------------------------------------------------------------------------------------ */
 .location {
   display: flex;
@@ -663,7 +663,7 @@ body.hud-minimized .icon-show {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
 }
 
-/* Green blade, white inset border, Highway Gothic lettering: the sign on every Manhattan corner */
+/* White enamel plate with a blue inset border: the street name plates of Catalan towns */
 .street-sign {
   max-width: 210px;
   overflow: hidden;
@@ -675,10 +675,10 @@ body.hud-minimized .icon-show {
   font-weight: 700;
   line-height: 1.05;
   letter-spacing: 0.01em;
-  color: #ffffff;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 55%), var(--sign-green);
+  color: #17315e;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 60%), #efece2;
   border-radius: 6px;
-  outline: 1.5px solid rgba(255, 255, 255, 0.92);
+  outline: 1.5px solid rgba(23, 49, 94, 0.92);
   outline-offset: -4px;
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35), 0 10px 22px -10px rgba(0, 0, 0, 0.75);
 }
@@ -1450,3 +1450,7 @@ body.touch-enabled .pop-item { min-height: 44px; }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Long popovers (the list of destinations) scroll instead of running off the screen */
+.popover-scroll { max-height: min(72vh, 600px); overflow-y: auto; overscroll-behavior: contain; }
+#teleport-list .pop-title, #camera-list .pop-title { margin-top: 8px; }

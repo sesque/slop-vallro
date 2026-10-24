@@ -1,12 +1,5 @@
 import * as THREE from 'three/webgpu';
-import {
-  ISLAND_BOUNDS,
-  CENTRAL_PARK_BOUNDS,
-  getIslandBoundsAtZ,
-  isTypingInField,
-  blockAt,
-  streetZ
-} from './city-config.js';
+import { isTypingInField } from './town-config.js';
 import { cityUniforms, createCarPaintMaterial, createContactShadowMaterial } from './tsl-materials.js';
 import {
   BODY_SPECS,
@@ -21,18 +14,18 @@ import {
 } from './actor-models.js';
 import { PersonCrowd, PersonRig } from './pedestrians.js';
 import { HEADLIGHTS, createVehicleHeadlight, placeVehicleHeadlight } from './vehicle-lights.js';
-import { bryantParkLawn } from './landmarks.js';
 
 // js/controllers.js
 // Sculpted, non-blocky GTA 6-style 3D models, animations, and physics controllers
 // for Third-Person Navigation:
 // 1. Person (Skinned Pedestrian: planted-footstep IK walk/run/jump, see pedestrians.js)
-// 2. Car (Aerodynamic Sculpted NYC Medallion Yellow Taxi with Sloped Windshield & Clearcoat)
+// 2. Car (Aerodynamic Sculpted Yellow Taxi with Sloped Windshield & Clearcoat)
 // 3. Cyclist (Sculpted Road Cyclist with Drop-Bar Frame & Aero Helmet)
-// 4. Helicopter (Manhattan Sightseeing Twin-Turbine Chopper)
+// 4. Helicopter (Twin-Turbine Sightseeing Chopper)
 
 // Spawn on 5th Ave at 37th St, facing south down the avenue toward the Empire State Building (34th St)
-const SPAWN_Z = streetZ(37);
+// Until a world is installed (setWorld) the ground is flat and the players can go anywhere within 100 km
+const FLAT_WORLD = { groundHeight: () => 0, bounds: { minX: -1e5, maxX: 1e5, minZ: -1e5, maxZ: 1e5 } };
 const groundCollider = { type: 'ground' };
 
 const CAR_DRIVE = {
@@ -68,7 +61,7 @@ function createTaxiDoorDecalTexture() {
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#ffbe14';
   ctx.fillRect(0, 0, 256, 128);
-  // Black T&LC circle emblem
+  // Black circle emblem with the taxi "T"
   ctx.fillStyle = '#111317';
   ctx.beginPath();
   ctx.arc(58, 64, 42, 0, Math.PI * 2);
@@ -78,38 +71,44 @@ function createTaxiDoorDecalTexture() {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText('T', 58, 66);
-  // NYC TAXI typography & Fare Rate
+  // TAXI lettering and the licence
   ctx.fillStyle = '#111317';
   ctx.textAlign = 'left';
   ctx.font = '900 26px Inter, Arial, sans-serif';
-  ctx.fillText('NYC TAXI', 112, 42);
+  ctx.fillText('TAXI', 112, 42);
   ctx.font = '700 15px JetBrains Mono, monospace';
-  ctx.fillText('7Y48 · MEDALLION', 112, 68);
+  ctx.fillText('4821 · LLICÈNCIA', 112, 68);
   ctx.font = '600 13px Inter, Arial, sans-serif';
-  ctx.fillText('$3.00 INITIAL FARE', 112, 90);
+  ctx.fillText('VALLÈS ORIENTAL', 112, 90);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 
-function createNYLicensePlateTexture() {
+// A Spanish plate: white, with the blue European strip on the left (the number is made up)
+function createLicensePlateTexture() {
   const c = document.createElement('canvas');
   c.width = 256;
   c.height = 128;
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#ffb81c';
+  ctx.fillStyle = '#f4f3ee';
   ctx.fillRect(0, 0, 256, 128);
-  ctx.fillStyle = '#0d2244';
-  ctx.fillRect(6, 6, 244, 24);
-  ctx.fillStyle = '#ffb81c';
-  ctx.font = '800 15px Inter, Arial, sans-serif';
+  ctx.fillStyle = '#12449f';
+  ctx.fillRect(0, 0, 34, 128);
+  ctx.fillStyle = '#ffd400';
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.arc(17 + Math.cos(a) * 9, 40 + Math.sin(a) * 9, 1.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#f4f3ee';
+  ctx.font = '800 20px Inter, Arial, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('NEW YORK', 128, 23);
-  ctx.fillStyle = '#0d2244';
-  ctx.font = '900 48px JetBrains Mono, monospace';
-  ctx.fillText('7Y48A', 128, 82);
-  ctx.font = '700 13px Inter, Arial, sans-serif';
-  ctx.fillText('NYC T&LC', 128, 114);
+  ctx.fillText('E', 17, 96);
+  ctx.fillStyle = '#16181c';
+  ctx.font = '900 54px JetBrains Mono, monospace';
+  ctx.fillText('4821 KDC', 148, 84);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
@@ -120,7 +119,7 @@ class ThirdPersonControllerManager {
     this.scene = scene;
     this.colliders = colliders;
     this._colliderCells = null; // built on first use, see nearColliders()
-    this.world = null; // see setWorld()
+    this.world = FLAT_WORLD; // see setWorld()
     this.activeMode = 'car'; // 'person' | 'car' | 'cyclist' | 'helicopter'
 
     this.keys = {
@@ -250,8 +249,8 @@ class ThirdPersonControllerManager {
     for (const action of Object.keys(this.keys)) this.keys[action] = false;
   }
 
-  // Swaps Manhattan for another world: { groundHeight(x, z, mode), bounds: { minX, maxX, minZ, maxZ }, confine?(x, z),
-  // normalAt?(x, z) }; with normalAt the car and the bike tilt to the slope.
+  // Installs the world: { groundHeight(x, z, mode), bounds: { minX, maxX, minZ, maxZ }, confine?(x, z), normalAt?(x, z) };
+  // with normalAt the car and the bike tilt to the slope.
   // The bounds are a hard edge for every mode (no island shore, no harbour for the helicopter); `confine` replaces
   // the box with an exact outline (the municipal boundary) and returns the nearest allowed { x, z }.
   setWorld(world) {
@@ -358,7 +357,6 @@ class ThirdPersonControllerManager {
     const extX = (car ? Math.abs(cosH) * 0.86 + Math.abs(sinH) * 2.18 : radius) + 0.1;
     const extZ = (car ? Math.abs(sinH) * 0.86 + Math.abs(cosH) * 2.18 : radius) + 0.1;
     const reach = Math.max(extX, extZ);
-    const margin = heli ? 6000 : 0;
     const entity = this.getActiveEntity();
     // Conservative body cylinders, including the taxi's corners, bicycle wheels and helicopter tail/rotor.
     const body = { person: [0.48, 1.9], car: [2.4, 1.9], cyclist: [1.0, 1.9], helicopter: [6.2, 3.2] };
@@ -368,18 +366,7 @@ class ThirdPersonControllerManager {
     }));
     const cameraBack = Math.cos(0.09) * entity.chaseDistance;
     const cameraUp = entity.chaseHeight + Math.sin(0.09) * entity.chaseDistance * 0.85;
-    const clampPoint = (px, pz) => {
-      if (this.world) return this.clampToWorld(px, pz);
-      pz = Math.max(ISLAND_BOUNDS.minZ + (heli ? -6000 : 30), Math.min(ISLAND_BOUNDS.maxZ + margin, pz));
-      px = Math.max(ISLAND_BOUNDS.minX - margin, Math.min(ISLAND_BOUNDS.maxX + margin, px));
-      if (!heli && getIslandBoundsAtZ) {
-        const shore = getIslandBoundsAtZ(pz);
-        const west = shore.westX + 8, east = shore.eastX - 8;
-        if (west > east) return null;
-        px = Math.max(west, Math.min(east, px));
-      }
-      return { x: px, z: pz };
-    };
+    const clampPoint = (px, pz) => this.clampToWorld(px, pz);
     const clear = (p) => {
       if (!p) return false;
       const baseY = heli ? altitude : this.getGroundHeight(p.x, p.z, this.activeMode);
@@ -411,9 +398,9 @@ class ThirdPersonControllerManager {
     const origin = clampPoint(x, z);
     if (clear(origin)) return origin;
     // Four-metre rings cover nearby streets and courtyards, with bounded work even for a click inside a large block.
-    const fallback = this.world ? this.clampToWorld(x, z) : null;
-    const cx = origin ? origin.x : fallback ? fallback.x : Math.max(ISLAND_BOUNDS.minX, Math.min(ISLAND_BOUNDS.maxX, x));
-    const cz = origin ? origin.z : fallback ? fallback.z : Math.max(ISLAND_BOUNDS.minZ + 30, Math.min(ISLAND_BOUNDS.maxZ, z));
+    const fallback = this.clampToWorld(x, z);
+    const cx = origin ? origin.x : fallback.x;
+    const cz = origin ? origin.z : fallback.z;
     for (let distance = 4; distance <= 256; distance += 4) {
       for (let i = 0; i < 32; i++) {
         const angle = i * Math.PI / 16;
@@ -425,7 +412,7 @@ class ThirdPersonControllerManager {
   }
 
   // =========================================================================
-  // 1. PERSON (SKINNED NYC PEDESTRIAN WITH PLANTED-FOOTSTEP IK GAIT, see pedestrians.js)
+  // 1. PERSON (SKINNED PEDESTRIAN WITH PLANTED-FOOTSTEP IK GAIT, see pedestrians.js)
   // =========================================================================
   createPersonEntity() {
     const root = new THREE.Group();
@@ -452,7 +439,7 @@ class ThirdPersonControllerManager {
       mesh: root,
       crowd,
       rig,
-      position: new THREE.Vector3(-11.6, ISLAND_BOUNDS.sidewalkHeight, SPAWN_Z + 12),
+      position: new THREE.Vector3(-11.6, 0.0, 12),
       heading: 0,
       speed: 0,
       verticalVel: 0,
@@ -463,7 +450,7 @@ class ThirdPersonControllerManager {
   }
 
   // =========================================================================
-  // 2. CAR (3D LOFTED SCULPTED NYC MEDALLION YELLOW TAXI SEDAN)
+  // 2. CAR (3D LOFTED SCULPTED YELLOW TAXI SEDAN)
   // =========================================================================
   createCarEntity() {
     const root = new THREE.Group();
@@ -482,7 +469,7 @@ class ThirdPersonControllerManager {
     carBodyMesh.receiveShadow = true;
     chassisPivot.add(carBodyMesh);
 
-    // 2. Authentic NYC Taxi Side Door T&LC Medallion & Fare Tariff Emblem Decals, hugging the curved front doors
+    // 2. Taxi side door emblem and licence decals, hugging the curved front doors
     const doorDecalTex = createTaxiDoorDecalTexture();
     const doorDecalMat = new THREE.MeshStandardNodeMaterial({
       map: doorDecalTex,
@@ -499,7 +486,7 @@ class ThirdPersonControllerManager {
     }
 
     // 3. High-Detail NY Empire Gold License Plates on the bumpers
-    const nyPlateTex = createNYLicensePlateTexture();
+    const nyPlateTex = createLicensePlateTexture();
     const nyPlateMat = new THREE.MeshStandardNodeMaterial({ map: nyPlateTex, roughness: 0.28 });
     const rearPlate = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.14, 0.02), nyPlateMat);
     rearPlate.position.set(0, spec.plates[1], spec.zRear - 0.006);
@@ -554,13 +541,13 @@ class ThirdPersonControllerManager {
 
     return {
       type: 'car',
-      label: 'NYC Yellow Taxi',
+      label: 'Taxi',
       mesh: root,
       chassisPivot,
       carState,
       headLights,
       wheels,
-      position: new THREE.Vector3(3.6, 0.0, SPAWN_Z + 12),
+      position: new THREE.Vector3(3.6, 0.0, 12),
       heading: 0,
       speed: 0,
       vx: 0,
@@ -715,7 +702,7 @@ class ThirdPersonControllerManager {
 
     return {
       type: 'cyclist',
-      label: 'NYC Bike Lane Cyclist',
+      label: 'Cyclist',
       mesh: root,
       leanPivot,
       frontWheel,
@@ -727,7 +714,7 @@ class ThirdPersonControllerManager {
       riderRig,
       helmet,
       headLight,
-      position: new THREE.Vector3(5.2, 0.0, SPAWN_Z - 8),
+      position: new THREE.Vector3(5.2, 0.0, -8),
       heading: 0,
       speed: 0,
       leanAngle: 0,
@@ -806,12 +793,12 @@ class ThirdPersonControllerManager {
 
     return {
       type: 'helicopter',
-      label: 'Sightseeing Helicopter',
+      label: 'Helicopter',
       mesh: root,
       tiltPivot,
       mainRotorPivot,
       tailRotorPivot,
-      position: new THREE.Vector3(-110, 96, SPAWN_Z - 60),
+      position: new THREE.Vector3(-110, 96, -60),
       heading: 0.62,
       speed: 0,
       verticalSpeed: 0,
@@ -823,28 +810,8 @@ class ThirdPersonControllerManager {
     };
   }
 
-  // On a raised curb island (city-config.js BLOCKS: the real blocks, malls & plazas), not in a park
-  isPointOnSidewalk(x, z) {
-    const b = blockAt(x, z);
-    return !!b && !(b.park > 0.6 && !b.median);
-  }
-
   getGroundHeight(x, z, mode = 'person') {
-    if (this.world) return this.world.groundHeight(x, z, mode);
-    // Inside Central Park (5th Ave to Central Park West, 59th St to 110th St)
-    const cp = CENTRAL_PARK_BOUNDS;
-    if (x > cp.minX && x < cp.maxX && z > cp.minZ && z < cp.maxZ) {
-      return 1.24;
-    }
-    // Inside Bryant Park's Great Lawn (west of the New York Public Library, 40th-42nd St)
-    const lawn = bryantParkLawn;
-    if (lawn && x > lawn.minX && x < lawn.maxX && z > lawn.minZ && z < lawn.maxZ) {
-      return lawn.top;
-    }
-    if (mode === 'person') {
-      return this.isPointOnSidewalk(x, z) ? ISLAND_BOUNDS.sidewalkHeight : 0.0;
-    }
-    return 0.0;
+    return this.world.groundHeight(x, z, mode);
   }
 
   // The colliders whose bounds come within `r` of (x, z), in their original order. They never move, so they are
@@ -887,29 +854,11 @@ class ThirdPersonControllerManager {
   }
 
   resolveHorizontalCollision(pos, radius, yHeight = 1.0, carEntity = null, entity = carEntity) {
-    // The detailed island (the helicopter may roam out over the harbour & the boroughs)
     const heli = this.activeMode === 'helicopter';
-    const m = heli ? 6000 : 0;
-    if (this.world) {
-      const edge = this.clampToWorld(pos.x, pos.z);
-      pos.x = edge.x;
-      pos.z = edge.z;
-    } else {
-      pos.x = Math.max(ISLAND_BOUNDS.minX - m, Math.min(ISLAND_BOUNDS.maxX + m, pos.x));
-      pos.z = Math.max(ISLAND_BOUNDS.minZ + (heli ? -6000 : 30), Math.min(ISLAND_BOUNDS.maxZ + m, pos.z));
-    }
-    if (!this.world && this.activeMode !== 'helicopter' && getIslandBoundsAtZ) {
-      const shore = getIslandBoundsAtZ(pos.z);
-      const minShoreX = shore.westX + 8.0;
-      const maxShoreX = shore.eastX - 8.0;
-      if (pos.x < minShoreX) {
-        pos.x = minShoreX;
-        if (carEntity && carEntity.speed) carEntity.speed *= 0.4;
-      } else if (pos.x > maxShoreX) {
-        pos.x = maxShoreX;
-        if (carEntity && carEntity.speed) carEntity.speed *= 0.4;
-      }
-    }
+    // The edge of the world (the municipal boundary) for every mode
+    const edge = this.clampToWorld(pos.x, pos.z);
+    pos.x = edge.x;
+    pos.z = edge.z;
 
     const sinH = carEntity ? Math.sin(carEntity.heading) : 0;
     const cosH = carEntity ? Math.cos(carEntity.heading) : 1;

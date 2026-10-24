@@ -21,18 +21,19 @@ import { SkyMesh } from 'three/addons/objects/SkyMesh.js';
 import { SunLight } from 'three/addons/lights/SunLight.js';
 import { SunLightNode } from 'three/addons/lights/SunLightNode.js';
 import { cityUniforms } from './tsl-materials.js';
+import { lightAt, MOON_DIRECTION } from './geo/sun.js';
 
 // js/lighting.js
 // Physically-Based Atmospheric Sky (Preetham SkyMesh + Beer-Powder Clouds),
 // Live PMREMGenerator IBL Cubemap, Three.js r186 SunLight (2-Cascade CSM),
-// and Occlusion-Aware Urban Canyon Global Illumination for Three.js r186 WebGPURenderer
+// and image-based lighting for Three.js r186 WebGPURenderer
 
 const TIME_PRESETS = {
   golden: {
     id: 'golden',
-    name: 'Golden Hour · 17:45',
-    // Crisp Manhattan canyon sun slicing across avenues & intersections so buildings, cars, trees & pedestrians cast sharp shadows
-    sunDir: new THREE.Vector3(-0.44, 0.58, -0.68).normalize(),
+    name: 'Golden Hour · 18:45',
+    // The low sun of 15 September at 18:45 (CEST) over Vallromanes, 41.5 N: west-south-west, about 13 degrees up
+    sunDir: new THREE.Vector3(...lightAt(18.75)),
     sunColor: 0xffca92,
     sunIntensity: 5.8,
     hemiSky: 0x9abbe6,
@@ -57,8 +58,8 @@ const TIME_PRESETS = {
   },
   midday: {
     id: 'midday',
-    name: 'Sunny Midday · 13:30',
-    sunDir: new THREE.Vector3(-0.34, 0.82, -0.46).normalize(),
+    name: 'Sunny Midday · 13:45',
+    sunDir: new THREE.Vector3(...lightAt(13.75)),
     sunColor: 0xfff5e8,
     sunIntensity: 6.6,
     hemiSky: 0xaad2ff,
@@ -83,8 +84,8 @@ const TIME_PRESETS = {
   },
   twilight: {
     id: 'twilight',
-    name: 'Blue Hour · 19:15',
-    sunDir: new THREE.Vector3(-0.52, 0.36, -0.77).normalize(),
+    name: 'Blue Hour · 20:10',
+    sunDir: new THREE.Vector3(...lightAt(20.1, 4)), // just after sunset: the light stays a few degrees above the horizon
     sunColor: 0xff9466,
     sunIntensity: 3.1,
     hemiSky: 0x4c6ca8,
@@ -109,8 +110,8 @@ const TIME_PRESETS = {
   },
   midnight: {
     id: 'midnight',
-    name: 'Manhattan Night · 23:00',
-    sunDir: new THREE.Vector3(0.42, 0.68, -0.60).normalize(),
+    name: 'Night · 23:00',
+    sunDir: new THREE.Vector3(...MOON_DIRECTION),
     sunColor: 0x8cb0e8,
     sunIntensity: 1.45,
     hemiSky: 0x263a62,
@@ -155,8 +156,7 @@ class LightingSystem {
     this.scene.background = null;
 
     // Physical Preetham SkyMesh + Beer-Powder Clouds (from three/addons/objects/SkyMesh.js). Its unit box must contain
-    // the camera wherever it flies over the 1:1 harbour (Manhattan alone is 13.6 km long; it renders at the far plane
-    // whatever its size)
+    // the camera wherever it flies (it renders at the far plane whatever its size)
     this.sky = new SkyMesh();
     this.sky.scale.setScalar(200000);
     this.sky.turbidity.value = 8.0;

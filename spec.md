@@ -225,7 +225,7 @@ All stages are Node ≥ 20 ESM. They are deterministic, log an inventory, and th
 | Traffic | Grid-based lanes, signals | Same car-following model (IDM-like `follow`/`brake`) on graph lanes. Lower density; speed limited by curvature and slope |
 | Pedestrians | Sidewalk tracks, crosswalks | Pavement graph derived from the pavement polygons; crossing points at intersections |
 | Helicopter | City-scale | Keep; ceiling about 600 m above `H0` |
-| Map UI | `nyc-map.js` | `town-map.js`: hillshade + buildings + roads + labels, teleport to facilities |
+| Map UI | `nyc-map.js` | `town-map.js` (done): hillshade + buildings + roads + labels, search, teleport |
 | Lighting | Presets | Keep presets. Set the sun azimuth/latitude for 41.5°N |
 | Audio | City ambience | Keep the engine; reduce traffic hum, add birds/wind (optional) |
 | Culling | `scene-culling.js` | Keep, and feed it the new chunked meshes |

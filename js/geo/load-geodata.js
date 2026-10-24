@@ -94,3 +94,11 @@ export async function loadProps(baseUrl = './data/', fetchImpl = globalThis.fetc
   }
   return { meta, props };
 }
+
+// Places, street labels, house numbers and teleport destinations (all in the local frame)
+export async function loadLabels(baseUrl = './data/', fetchImpl = globalThis.fetch) {
+  const res = await fetchImpl(`${baseUrl}labels.json`);
+  if (!res.ok) throw new Error(`labels.json: HTTP ${res.status}`);
+  const meta = await res.json();
+  return { meta, places: meta.places, streets: meta.streets, numbers: meta.numbers, teleports: meta.teleports, categories: meta.categories };
+}

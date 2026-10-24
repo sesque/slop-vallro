@@ -240,3 +240,37 @@ test('teleport releases every camera pointer and ignores old gestures before acc
   close(h.camera.orbitYawOffset, -0.065);
   assert.equal(h.camera.isDragging, true);
 });
+
+test('scenic cameras stand on the ground wherever it is and look at a point above it', () => {
+  const h = cameraHarness();
+  h.camera.setWorld({ groundHeight: (x, z) => 100 + x * 0.1 });
+  for (const id of ['village', 'pedro', 'valley', 'golf']) {
+    h.camera.setCameraPreset(id, true);
+    h.camera.update(1 / 60, 0);
+    const preset = h.camera.getActivePreset();
+    assert.equal(preset.category, 'scenic');
+    const cam = h.camera.camera.position, look = h.camera.camera.target;
+    close(cam.y, 100 + preset.eye[0] * 0.1 + preset.eye[1]);
+    close(look.y, 100 + preset.target[0] * 0.1 + preset.target[2] * 0 + preset.target[1]);
+    close(cam.z, preset.eye[2]);
+  }
+  // the sway moves the eye along x, never up or down relative to the ground
+  h.camera.setCameraPreset('valley', true);
+  h.camera.update(1 / 60, 0);
+  const x0 = h.camera.camera.position.x;
+  h.camera.update(1 / 60, 7);
+  for (let i = 0; i < 400; i++) h.camera.update(1 / 60, 7);
+  assert.ok(Math.abs(h.camera.camera.position.x - x0) > 1);
+  assert.ok(Math.abs(h.camera.camera.position.x - x0) <= 30 + 1e-6);
+});
+
+test('the drone orbits the village at a height above the terrain below it', () => {
+  const h = cameraHarness();
+  h.camera.setWorld({ groundHeight: (x, z) => 50 + z * 0.05 });
+  h.camera.setCameraPreset('drone', true);
+  h.camera.update(1 / 60, 10);
+  const cam = h.camera.camera.position;
+  const above = cam.y - (50 + cam.z * 0.05);
+  assert.ok(above > 150 && above < 310, `drone ${above} m above the ground`);
+  assert.ok(Math.hypot(cam.x, cam.z) > 430 && Math.hypot(cam.x, cam.z) < 690);
+});
