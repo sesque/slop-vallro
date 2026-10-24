@@ -824,10 +824,11 @@ function hashPos(x, y, z) {
 
 /**
  * Builds the instanced tree field for `sites` ({ x, y, z, scale, species, yaw?, sx?, sz?, tier? }) and keeps each
- * tree's level of detail up to date from the camera of every view pass (scene.onBeforeRender). Returns
+ * tree's level of detail up to date from the camera of every view pass (scene.onBeforeRender). `near` and `mid` are the
+ * distances (m) of the full-detail and the coarse levels (the defaults suit big street trees). Returns
  * { group, material, atlas, update(cameraPosition) }.
  */
-function createTreeField(scene, sites) {
+function createTreeField(scene, sites, { near = LOD_NEAR, mid = LOD_MID } = {}) {
   const group = new THREE.Group();
   group.name = 'Trees';
   const atlas = createLeafAtlas();
@@ -993,9 +994,9 @@ function createTreeField(scene, sites) {
       const maxD = low ? Math.min(MAX_DIST[tier[i]], LOW_CUTOFF) : MAX_DIST[tier[i]];
       // levels 0-2, 3 = hidden; next to a boundary a tree keeps the level it has
       const curL = lod[i] === 255 ? 3 : lod[i];
-      let nextL = d < LOD_NEAR ? 0 : d < LOD_MID ? 1 : d < maxD ? 2 : 3;
+      let nextL = d < near ? 0 : d < mid ? 1 : d < maxD ? 2 : 3;
       if (Math.abs(nextL - curL) === 1) {
-        const edge = [LOD_NEAR, LOD_MID, maxD][Math.min(nextL, curL)];
+        const edge = [near, mid, maxD][Math.min(nextL, curL)];
         if (Math.abs(d - edge) < LOD_HYSTERESIS) nextL = curL;
       }
       const next = nextL === 3 ? 255 : nextL;

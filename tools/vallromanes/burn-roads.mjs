@@ -60,3 +60,16 @@ export function burnRoads(heights, grid, edges, { base = 0, depth = 0 } = {}) {
   }
   return changed;
 }
+
+// Pseudo road edges along the centre of each stair flight, so the same burn lowers the ground under the steps: the
+// profile runs from the lowest to the highest step; the strip is the flight's width plus a little margin.
+export function stairCorridors(flights) {
+  return flights.map((f) => {
+    const first = f.steps[0], last = f.steps[f.steps.length - 1];
+    const mid = (s) => [(s.ax ?? s[0]) / 2 + (s.bx ?? s[2]) / 2, (s.az ?? s[1]) / 2 + (s.bz ?? s[3]) / 2];
+    const a = Array.isArray(first) ? [(first[0] + first[2]) / 2, (first[1] + first[3]) / 2, first[4]] : [...mid(first), first.z];
+    const b = Array.isArray(last) ? [(last[0] + last[2]) / 2, (last[1] + last[3]) / 2, last[4]] : [...mid(last), last.z];
+    const half = f.width / 2 + 0.1;
+    return { cls: 'track', halfL: half, halfR: half, swL: 0, swR: 0, pts: [a, b] };
+  });
+}

@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { E0, N0, H0, toLocal } from './frame.mjs';
 import { readBue } from './read-bue.mjs';
 import { loadTerrain } from '../../js/geo/load-geodata.js';
+import { fsFetch } from './fs-fetch.mjs';
 import { centroid, orientedBox, pointInRings, reverseRing, signedArea, simplifyRing } from '../../js/geo/polygon.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -100,15 +101,6 @@ export function chooseRoof(outer, holes, kindIndex) {
   return { roof: ROOF.HIP, rise: +Math.max(0.6, Math.min(2.2, box.hz * 0.35)).toFixed(2) };
 }
 
-function fsFetch(base) {
-  return async (url) => {
-    const file = path.join(root, url.replace(/^\.\//, ''));
-    if (!fs.existsSync(file)) return { ok: false, status: 404 };
-    const buf = fs.readFileSync(file);
-    return { ok: true, status: 200, json: async () => JSON.parse(buf.toString()), arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length) };
-  };
-}
-
 export function buildBuildings(features, ground, boundaryRings) {
   const records = [];
   const rings = [];
@@ -155,7 +147,7 @@ export function buildBuildings(features, ground, boundaryRings) {
 }
 
 async function main() {
-  const { sampler, meta } = await loadTerrain('./data/', fsFetch(root));
+  const { sampler, meta } = await loadTerrain('./data/', fsFetch());
   if (meta.frame.H0 !== H0 || meta.frame.E0 !== E0 || meta.frame.N0 !== N0) throw new Error('data/terrain.json was baked with a different frame; rerun build-terrain.mjs');
   const boundary = JSON.parse(fs.readFileSync(path.join(root, 'data/boundary.json'), 'utf8'));
   const features = readBue(path.join(RAW, 'bue'), { transform: toLocal });

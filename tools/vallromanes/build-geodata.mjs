@@ -1,5 +1,5 @@
-// Runs every bake stage in order (boundary, roads, terrain with the roads burned in, buildings) and writes
-// data/manifest.json (spec §5.8): frame, counts, file sizes and hashes.
+// Runs every bake stage in order (boundary, roads, stairs, terrain with roads and stairs burned in, buildings,
+// features, props) and writes data/manifest.json (spec §5.8): frame, counts, file sizes and hashes.
 //   npm run geodata
 // Stages needing raw downloads (tools/data/vallromanes/raw) fail loudly if a source is missing. The DTM/DSM windows
 // are fetched separately with fetch-icgc-dtm.mjs (network) and are not part of this run.
@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { CRS, E0, H0, N0 } from './frame.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const stages = ['build-boundary.mjs', 'build-roads.mjs', 'build-terrain.mjs', 'build-buildings.mjs'];
+const stages = ['build-boundary.mjs', 'build-roads.mjs', 'build-stairs.mjs', 'build-terrain.mjs', 'build-buildings.mjs', 'build-features.mjs', 'build-props.mjs'];
 
 for (const stage of stages) {
   console.log(`\n=== ${stage} ===`);
@@ -22,7 +22,7 @@ for (const stage of stages) {
   }
 }
 
-const files = ['boundary.json', 'roads.json', 'terrain.json', 'terrain.bin', 'buildings.json', 'buildings.bin'];
+const files = ['boundary.json', 'roads.json', 'stairs.json', 'terrain.json', 'terrain.bin', 'buildings.json', 'buildings.bin', 'features.json', 'features.bin', 'props.json', 'props.bin'];
 const manifestFiles = {};
 for (const f of files) {
   const buf = fs.readFileSync(path.join(root, 'data', f));
@@ -32,12 +32,15 @@ const terrain = JSON.parse(fs.readFileSync(path.join(root, 'data/terrain.json'),
 const buildings = JSON.parse(fs.readFileSync(path.join(root, 'data/buildings.json'), 'utf8'));
 const boundary = JSON.parse(fs.readFileSync(path.join(root, 'data/boundary.json'), 'utf8'));
 const roads = JSON.parse(fs.readFileSync(path.join(root, 'data/roads.json'), 'utf8'));
+const stairs = JSON.parse(fs.readFileSync(path.join(root, 'data/stairs.json'), 'utf8'));
+const features = JSON.parse(fs.readFileSync(path.join(root, 'data/features.json'), 'utf8'));
+const props = JSON.parse(fs.readFileSync(path.join(root, 'data/props.json'), 'utf8'));
 const manifest = {
   version: 1,
   frame: { E0, N0, H0, crs: CRS },
   municipality: { ine: boundary.ine, name: boundary.name, areaKm2: boundary.areaKm2 },
   terrainBounds: terrain.bounds,
-  counts: { structures: buildings.count, roadEdges: roads.edges.length, terrainTiers: terrain.tiers.length },
+  counts: { structures: buildings.count, roadEdges: roads.edges.length, stairFlights: stairs.count, featureLines: features.count, waterBodies: features.water.length, props: props.types.reduce((s, t) => s + t.count, 0), terrainTiers: terrain.tiers.length },
   files: manifestFiles,
   attribution: [
     'Cartografia topogràfica urbana 1:1000 © Diputació de Barcelona',

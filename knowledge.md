@@ -182,6 +182,12 @@ index contour labels 331.
 - **Names:** `ANGLE` of the street labels is counter-clockwise from east. 129 of 139 labels match an edge running their way within 25 m; propagating straight on at junctions names 243 of 289 urban edges (84 %, 90 % of the length) from the BUE alone. Letting names turn 90° would reach 96 % but names the wrong streets; the remaining 46 edges (3.2 km, median 51 m) are for `overrides/roads.json`.
 - **OSM** (Overpass, 1 049 highways in the municipality box, 840 kB; ODbL, credit in the README): an edge takes the way that stays within 8 m of at least 80 % of it. 392 of 624 edges match (250 of 289 urban); 54 urban edges are one-way, most others default to two-way with one lane each way. Urban speeds: 30 km/h on 274 edges, 50 on 12, 20 on 3; the C-roads carry 50 to 90. OSM names fill 11 gaps, so 257 of 289 urban edges (89 %, 93 % of the length) are named.
 
+### 3.8 What the feature and prop layers contain (measured)
+- **Walls and fences:** the Z of `CON_15` walls, garden walls, fences, railings and hedges behaves like the **top** (median 1.6 m above the ground for walls, 2.2 m for hedges). `CON_19` wire fences have Z at ground level (median 0.3 m), so their height is a default 1.4 m. Retaining-wall lines (`CON_14`, 81 km) are the crest: the base is the lower ground 1.5 m either side. Line totals: walls 54 km, retaining 81 km, hedges 42 km, wire fences 16 km.
+- **Stairs:** each `CON_23` line is one step edge (median 1.6 m long, 0.5 m between steps, 0.2 m rise per step). 11 243 lines group into 1 411 flights of 2 or more steps (median 5 steps, 0.9 m rise, 1.6 m wide) and 1 994 lone lines. A survey wall line sometimes crosses the foot of a flight; the baker cuts walls around flights.
+- **Pools and ponds:** outlines come in pieces (about 1.3 per ring). Joining ends within 0.3 m gives 465 pools (all with an inner margin) and 58 ponds; a wider tolerance joins unrelated pieces. Pools sit about 0.14 m above the ground (flat Z), ponds can be 1 m below it.
+- **Props:** `ANGLE` is 0 for trees, lamps, poles and manholes (no orientation information) but real for gullies, tree pits and fountains. Lamps point their bracket at the nearest street. Trees carry no species or height, so the three upstream species are used at random (plane, locust, elm), scaled 0.5 to 0.9.
+
 ## 4. Decisions so far
 - Primary geometry comes from **BUE 1:1000 SHP**. Building floor counts come from **Catastro**. Terrain comes
   from **ICGC 0.5 m DTM** (BUE contours and spot heights used for validation and fill). Road attributes come

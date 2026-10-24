@@ -12,13 +12,14 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { E0, N0, H0 } from './frame.mjs';
 import { readBue } from './read-bue.mjs';
 import { createTerrainSampler, decodeHeights, decodePlanar } from '../../js/geo/terrain-sampler.js';
-import { burnRoads } from './burn-roads.mjs';
+import { burnRoads, stairCorridors } from './burn-roads.mjs';
 import { ROAD_DEPTH } from '../../js/world/street-geometry.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const RAW = path.join(root, 'tools/data/vallromanes/raw');
 export const SCALE = 0.05; // metres per quantised step (max rounding error 2.5 cm)
 export const GATE = { median: 0.3, p95: 1.0 };
+export const STAIR_DEPTH = 0.25;
 
 function arg(name, def) {
   const i = process.argv.indexOf(name);
@@ -91,7 +92,7 @@ export function encodeHeights(hAbs) {
 }
 
 // Builds a tier covering the local-frame rectangle [minX, maxX] × [minZ, maxZ] (snapped to the tier's cell grid).
-export function buildTier(dem, name, cell, rect, roads = null) {
+export function buildTier(dem, name, cell, rect, roads = null, stairs = null) {
   const { meta, heights } = dem;
   // local x = E - E0, local z = N0 - N; source pixel column = E - originE, row = originN - N.
   const colOfX = (x) => x + E0 - meta.originE;
@@ -106,8 +107,10 @@ export function buildTier(dem, name, cell, rect, roads = null) {
   const minX = c0 + meta.originE - E0, minZ = r0 + N0 - meta.originN;
   // roads are in local y (H - H0); the grid holds absolute H here, hence base = H0
   const burned = roads ? burnRoads(abs, { minX, minZ, cell, w, h }, roads, { base: H0, depth: ROAD_DEPTH }) : 0;
+  // The ground under a flight of steps is lowered 25 cm below its ramp, so the steps always stand clear of it
+  const burnedStairs = stairs ? burnRoads(abs, { minX, minZ, cell, w, h }, stairCorridors(stairs), { base: H0, depth: STAIR_DEPTH }) : 0;
   return {
-    burned,
+    burned, burnedStairs,
     name, cell, width: w, height: h,
     minX: c0 + meta.originE - E0,
     minZ: r0 + N0 - meta.originN,
@@ -167,8 +170,12 @@ function main() {
   const roadsFile = path.join(root, 'data/roads.json');
   const roads = fs.existsSync(roadsFile) ? JSON.parse(fs.readFileSync(roadsFile, 'utf8')).edges : null;
   if (!roads) console.warn('WARNING: data/roads.json not found, terrain is not flattened under roads (run build-roads.mjs first)');
-  const tiers = [buildTier(dem, 'fine', fineCell, core, roads), buildTier(dem, 'coarse', coarseCell, full, roads)];
+  const stairsFile = path.join(root, 'data/stairs.json');
+  const stairs = fs.existsSync(stairsFile) ? JSON.parse(fs.readFileSync(stairsFile, 'utf8')).flights : null;
+  if (!stairs) console.warn('WARNING: data/stairs.json not found, no ground is lowered under stairs (run build-stairs.mjs first)');
+  const tiers = [buildTier(dem, 'fine', fineCell, core, roads, stairs), buildTier(dem, 'coarse', coarseCell, full, roads, stairs)];
   if (roads) console.log(`Road profiles burned into the terrain: ${tiers.map((t) => `${t.name} ${t.burned} vertices`).join(', ')}`);
+  if (stairs) console.log(`Ground lowered under ${stairs.length} stair flights: ${tiers.map((t) => `${t.name} ${t.burnedStairs} vertices`).join(', ')}`);
   const sampler = createTerrainSampler(tiers.map((t) => ({ ...t, heights: decodeHeights(t.u16, SCALE) })));
 
   const report = {};

@@ -64,7 +64,7 @@ function frames(pts) {
   });
 }
 
-function addVertex(out, x, y, z, n, u, v, info) {
+export function addVertex(out, x, y, z, n, u, v, info) {
   const k = out.position.length / 3;
   out.position.push(x, y, z);
   out.normal.push(n[0], n[1], n[2]);
@@ -74,7 +74,7 @@ function addVertex(out, x, y, z, n, u, v, info) {
 }
 
 // Triangles of a quad (a, b, c, d) = (A_i, B_i, B_i+1, A_i+1) whose face normal points up (+y) or along `dir`
-function addQuad(out, a, b, c, d, facing) {
+export function addQuad(out, a, b, c, d, facing) {
   const p = (k) => [out.position[k * 3], out.position[k * 3 + 1], out.position[k * 3 + 2]];
   const [pa, pb, pc] = [p(a), p(b), p(c)];
   const u = [pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]], v = [pc[0] - pa[0], pc[1] - pa[1], pc[2] - pa[2]];

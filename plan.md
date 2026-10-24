@@ -81,14 +81,20 @@ behind each step are in `spec.md` (section numbers in brackets).
 **Milestone C:** drive the taxi through Vallromanes. *Reached (open `index.html?terrain`, press 2).*
 
 ## Phase 5 — Features and props (spec §5.5–5.6)
-- [ ] Walls and retaining walls (height from terrain), fences, railings, hedges.
-- [ ] Stairs: group step lines into flights and build the geometry.
-- [ ] Pools, streams, ponds, bridges, crash barriers.
-- [ ] Instanced trees (about 11.9k), lamps (about 1.6k, with night lights through the existing lighting
-      system), poles, manholes, tree pits.
-- [ ] Wall segments added to the colliders.
+- [x] Walls, retaining walls, hedges, fences, railings and crash barriers (`build-features.mjs`, `feature-geometry.js`,
+      `features.js`): 10 599 polylines with a base and top per vertex (survey Z where plausible, kind default otherwise),
+      cut around stair flights, 9 683 colliders (walls under 1 m are stepped over; segments on a carriageway are skipped).
+- [x] Stairs (`stairs-group.mjs`, `build-stairs.mjs`): 1 411 flights of 9 249 steps with risers, treads and sides; the
+      ground under them is lowered 25 cm; `stair-index.js` lifts a walker onto the treads.
+- [x] 465 pools and 58 ponds as raised tanks (the terrain is not carved), streams and ditches as ribbons, 12 bridges as
+      decks with parapets. Limits: bridges do not cut the road burn under them; the survey's power lines are not drawn.
+- [x] `build-props.mjs` + `props.js`: 11 836 trees (the upstream instanced tree field, closer LOD distances, tier 2),
+      1 553 lamps (bracket towards the road, glowing lens, 36 pooled point lights at night), 660 poles, 415 pillars,
+      802 manholes, 552 gullies, 208 tree pits, 6 fountains.
+- [x] Wall, trunk, pole and pillar colliders (14 470 prop colliders + 9 683 wall colliders + 3 916 buildings).
 
-**Milestone D:** street-level detail comparable to upstream.
+**Milestone D:** street-level detail comparable to upstream. *Reached for the data the survey has (no species, no
+facade detail yet); about 2.5 M triangles in a typical view at 90 to 120 fps in the preview pane.*
 
 ## Phase 6 — UI, labels and gameplay adaptation (spec §5.7, §6)
 - [ ] `build-labels.mjs`: streets, house numbers, places; facilities become teleport points.

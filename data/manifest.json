@@ -20,6 +20,10 @@
   "counts": {
     "structures": 4313,
     "roadEdges": 624,
+    "stairFlights": 1411,
+    "featureLines": 10599,
+    "waterBodies": 523,
+    "props": 16032,
     "terrainTiers": 2
   },
   "files": {
@@ -28,24 +32,44 @@
       "sha256": "13bf0ad6351679fd3aaefb94ab714fec2214e07341c0af7f0844a1afee68aa12"
     },
     "roads.json": {
-      "bytes": 360371,
-      "sha256": "56d594522f1aa5fb0f83242fef08a03d01e44fef756c1b18ba7ace218bf4a36f"
+      "bytes": 367981,
+      "sha256": "801836d508c0baec1a7e51f07beb77c6433f5f3432ae5497e74f6390382077ce"
+    },
+    "stairs.json": {
+      "bytes": 460338,
+      "sha256": "d27942671d0eab9eab1e5cab1f8934e695e7b3ceccd7dbfc1e5c46f5ab69f761"
     },
     "terrain.json": {
-      "bytes": 1116,
-      "sha256": "b1e012f90cd913337d16cc59a27d49b1bf50d3f5bab2d8f7f3b9c69b5a9806f1"
+      "bytes": 1115,
+      "sha256": "5d8f669d962272a64d118c2cf07a62bfd6f12e336cbed7019f0f6d71e6262996"
     },
     "terrain.bin": {
       "bytes": 8405908,
-      "sha256": "4e2ce748b01afde9081ca635f8913674bd0a0f266ae5ce21540b9a8cd2684e4c"
+      "sha256": "adf02529d5b2f72459cff796a560c9a598e8ec88c4917bf547132f34698d8faf"
     },
     "buildings.json": {
-      "bytes": 558286,
-      "sha256": "8df9339ad4c2b0fee65171e34b8b2640d470f5f04613d35fc8301edd8b681aa7"
+      "bytes": 558309,
+      "sha256": "d428d43dff041b9dbff3eae8099eac5bdb89f3ba6ec054e763a50c0eb1dd38a1"
     },
     "buildings.bin": {
       "bytes": 208448,
       "sha256": "915a4fcbe5260d056199878da60378496df5ae5bf861f1b744340279d278c59d"
+    },
+    "features.json": {
+      "bytes": 598026,
+      "sha256": "cefa64b28927a5246c3e9b1dc0311c07fc1bff7952695b15360522b781412474"
+    },
+    "features.bin": {
+      "bytes": 1458496,
+      "sha256": "f1bee1214affd50e4cd95181ec0cc3ba889e34bd681b7e7931db0176fabea36d"
+    },
+    "props.json": {
+      "bytes": 554,
+      "sha256": "75348ccbcb4a0a9e22754ac0887dd2bdb3ff68884a72a6a25d3d56c7a3ad6cdf"
+    },
+    "props.bin": {
+      "bytes": 192384,
+      "sha256": "dcbf3c0b9f4a679dfa948fbc30ec09f0f5efe34142d9616000b9511f49193392"
     }
   },
   "attribution": [
