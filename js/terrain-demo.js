@@ -8,18 +8,24 @@ import { TouchControls } from './touch-controls.js';
 import { GamepadControls } from './gamepad-controls.js';
 import { CameraSystem } from './cameras.js';
 import { LightingSystem } from './lighting.js';
-import { loadTerrain } from './geo/load-geodata.js';
+import { loadBoundary, loadBuildings, loadRoads, loadTerrain } from './geo/load-geodata.js';
+import { confineToRing } from './geo/polygon.js';
+import { createRoadIndex } from './geo/road-index.js';
 import { buildTerrain } from './world/terrain.js';
+import { buildBuildings } from './world/buildings.js';
+import { buildStreets } from './world/streets.js';
+import { CURB, LIFT, ROAD_DEPTH, TRACK_LIFT } from './world/street-geometry.js';
 
 // js/terrain-demo.js
-// Phase 2 milestone: only the real Vallromanes terrain, with the four player modes walking, driving and flying over it.
+// Phase 2-4 milestone: the real Vallromanes terrain, BUE buildings and streets, with the four player modes walking,
+// driving and flying over them.
 // Started by main.js when the page is opened with ?terrain. Everything NYC-specific (blocks, traffic, map, audio) is
 // left out; the lighting, camera, controllers and post-processing are the upstream ones.
 
 // Where the player starts: the Ajuntament, the origin of the local frame
 const SPAWN = { x: 0, z: 0, heading: Math.PI };
-// Keep the player this far inside the baked terrain; the real municipal boundary replaces this box in phase 3
-const EDGE_INSET = 8;
+// Players stay this far inside the municipal boundary (the hard edge of the world)
+const EDGE_MARGIN = 3;
 
 export async function initTerrainDemo() {
   const container = document.getElementById('canvas-container');
@@ -42,16 +48,32 @@ export async function initTerrainDemo() {
   const scene = new THREE.Scene();
   const lightingSystem = new LightingSystem(scene, renderer);
 
-  setStatus('Loading Vallromanes terrain...');
-  const { sampler, frame } = await loadTerrain('./data/');
+  setStatus('Loading Vallromanes terrain and buildings...');
+  const [{ sampler, frame }, boundary, { structures }, roads] = await Promise.all([
+    loadTerrain('./data/'), loadBoundary('./data/'), loadBuildings('./data/'), loadRoads('./data/')
+  ]);
   const terrain = buildTerrain(scene, sampler);
+  const buildings = buildBuildings(scene, structures);
+  const streets = buildStreets(scene, roads);
+  const roadIndex = createRoadIndex(roads, streets.trims);
   const b = sampler.bounds;
+  // The terrain under a street is baked ROAD_DEPTH below the street's profile; the asphalt rides LIFT above the profile
+  // and the pavement CURB above that, so what stands or drives on them has to sit that much higher
+  const groundHeight = (x, z, mode) => {
+    const base = sampler.heightAt(x, z);
+    const hit = roadIndex.query(x, z, 0);
+    if (!hit || !hit.kind) return base;
+    if (hit.edge.cls === 'track' || hit.edge.cls === 'urbanUnpaved') return base + ROAD_DEPTH + TRACK_LIFT;
+    return base + ROAD_DEPTH + LIFT + (hit.kind === 'sidewalk' && mode === 'person' ? CURB : 0);
+  };
   const world = {
-    groundHeight: (x, z) => sampler.heightAt(x, z),
-    bounds: { minX: b.minX + EDGE_INSET, maxX: b.maxX - EDGE_INSET, minZ: b.minZ + EDGE_INSET, maxZ: b.maxZ - EDGE_INSET }
+    groundHeight,
+    normalAt: sampler.normalAt,
+    bounds: { minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ },
+    confine: (x, z) => confineToRing(boundary.rings[0], x, z, EDGE_MARGIN)
   };
 
-  const controllerManager = new ThirdPersonControllerManager(scene, []);
+  const controllerManager = new ThirdPersonControllerManager(scene, buildings.colliders);
   controllerManager.setWorld(world);
   const cameraSystem = new CameraSystem(renderer.domElement, controllerManager);
   const touchControls = new TouchControls(controllerManager);
@@ -171,7 +193,7 @@ export async function initTerrainDemo() {
   if (document.fonts) document.fonts.ready.then(placeModeIndicator);
 
   // Handles for the console and the tests of this milestone
-  window.vallromanes = { gpuErrors, THREE, scene, renderer, terrain, sampler, controllerManager, cameraSystem, lightingSystem, selectMode };
+  window.vallromanes = { gpuErrors, THREE, scene, renderer, terrain, buildings, streets, roadIndex, roads, boundary, sampler, controllerManager, cameraSystem, lightingSystem, selectMode };
 
   // An empty frame first: it configures the scene pass's render target (MSAA samples, depth format), so the pipelines
   // built for the real frames are the ones the pass asks for (js/main.js does the same before compiling shaders)
@@ -227,7 +249,10 @@ export async function initTerrainDemo() {
       document.body.classList.toggle('is-boosting', controllerManager.keys.boost && mph > 0);
       // Altitude as metres above sea level (local y is relative to H0)
       if (elAltitude) elAltitude.textContent = String(Math.round(ent.position.y + frame.H0));
-      if (elLocation) elLocation.textContent = `Vallromanes · x ${Math.round(ent.position.x)}, z ${Math.round(ent.position.z)}`;
+      if (elLocation) {
+        const street = roadIndex.nameAt(ent.position.x, ent.position.z);
+        elLocation.textContent = street ? `Vallromanes · ${street}` : `Vallromanes · x ${Math.round(ent.position.x)}, z ${Math.round(ent.position.z)}`;
+      }
     }
   });
 }

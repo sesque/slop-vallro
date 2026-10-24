@@ -398,3 +398,91 @@ test('an installed world replaces Manhattan ground height and its bounds are a h
     assert.deepEqual([pos.x, pos.z], [60, -70], activeMode);
   }
 });
+
+// A solid square [0, 10]² with the contract of js/world/buildings.js createCollider(): AABB + pushOut(x, z, r)
+function squareCollider(maxY = 8) {
+  return {
+    minX: 0, maxX: 10, minZ: 0, maxZ: 10, maxY,
+    pushOut(x, z, r) {
+      const cx = Math.max(0, Math.min(10, x)), cz = Math.max(0, Math.min(10, z));
+      const d = Math.hypot(x - cx, z - cz);
+      if (d >= r) return null;
+      if (d === 0) return null; // centre inside: not needed by these tests
+      const nx = (x - cx) / d, nz = (z - cz) / d;
+      return { x: x + nx * (r - d), z: z + nz * (r - d), nx, nz };
+    }
+  };
+}
+
+test('outline colliders push a walking person out along the wall normal', () => {
+  const { controller } = keyboardHarness({ ISLAND_BOUNDS: { sidewalkHeight: 0.15 } });
+  controller.setWorld({ groundHeight: () => 0, bounds: { minX: -100, maxX: 100, minZ: -100, maxZ: 100 } });
+  controller.colliders = [squareCollider()];
+  controller._colliderCells = null;
+  controller.activeMode = 'person';
+  const pos = { x: -0.2, y: 0, z: 5 };
+  controller.resolveHorizontalCollision(pos, 0.48, 1.0);
+  assert.ok(Math.abs(pos.x - -0.48) < 1e-9 && pos.z === 5);
+  const above = { x: -0.2, y: 20, z: 5 }; // flying over the roof: no collision
+  controller.resolveHorizontalCollision(above, 0.48, 20);
+  assert.equal(above.x, -0.2);
+});
+
+test('outline colliders test the car with three circles along its body', () => {
+  const { controller } = keyboardHarness({ ISLAND_BOUNDS: { sidewalkHeight: 0.15 } });
+  controller.setWorld({ groundHeight: () => 0, bounds: { minX: -100, maxX: 100, minZ: -100, maxZ: 100 } });
+  controller.colliders = [squareCollider()];
+  controller._colliderCells = null;
+  controller.activeMode = 'car';
+  const car = { heading: 0, speed: 0 };
+  const pos = { x: -0.5, y: 0, z: 5 }; // heading 0: the body runs along +z, wall on its right
+  controller.resolveHorizontalCollision(pos, 1.35, 1.0, car);
+  assert.ok(Math.abs(pos.x - -0.95) < 1e-9, `x = ${pos.x}`);
+  const nose = { x: 3, y: 0, z: -1.7 }; // only the front circle (z + 1.3) reaches the wall at z = 0
+  controller.resolveHorizontalCollision(nose, 1.35, 1.0, { heading: 0, speed: 0 });
+  assert.ok(nose.z < -1.7 || nose.x !== 3);
+  assert.ok(Math.hypot(nose.x - 3, nose.z - -1.7) > 0);
+});
+
+test('a world confine function replaces the box edge', () => {
+  const { controller } = keyboardHarness({ ISLAND_BOUNDS: { sidewalkHeight: 0.15 } });
+  controller.setWorld({
+    groundHeight: () => 0,
+    bounds: { minX: -100, maxX: 100, minZ: -100, maxZ: 100 },
+    confine: (x, z) => ({ x: Math.min(x, 20), z: Math.min(z, 30) })
+  });
+  const out = controller.clampToWorld(500, 500);
+  assert.deepEqual([out.x, out.z], [20, 30]);
+  controller.colliders = [];
+  controller._colliderCells = null;
+  controller.activeMode = 'person';
+  const pos = { x: 70, y: 0, z: 70 };
+  controller.resolveHorizontalCollision(pos, 0.48, 1.0);
+  assert.deepEqual([pos.x, pos.z], [20, 30]);
+});
+
+test('vehicles tilt to the slope: nose up on a climb, the left side up when the ground rises to the left', () => {
+  const { controller } = keyboardHarness({ ISLAND_BOUNDS: { sidewalkHeight: 0.15 } });
+  const a = 0.2; // ground rises at about 11 degrees along +x
+  controller.setWorld({ groundHeight: () => 0, bounds: { minX: -9, maxX: 9, minZ: -9, maxZ: 9 }, normalAt: () => [-Math.sin(a), Math.cos(a), 0] });
+  const ent = (heading) => ({ position: { x: 0, z: 0 }, heading });
+  const climbing = ent(Math.PI / 2); // forward = +x, uphill
+  for (let i = 0; i < 120; i++) controller.slopeTilt(climbing, 1 / 60);
+  assert.ok(Math.abs(climbing.slopePitch - -a) < 1e-3, `pitch ${climbing.slopePitch}`); // negative rotation.x = nose up
+  assert.ok(Math.abs(climbing.slopeRoll) < 1e-3);
+  const descending = ent(-Math.PI / 2);
+  for (let i = 0; i < 120; i++) controller.slopeTilt(descending, 1 / 60);
+  assert.ok(Math.abs(descending.slopePitch - a) < 1e-3);
+  const across = ent(0); // forward = +z, the ground rises towards +x, which is the left of the vehicle
+  for (let i = 0; i < 120; i++) controller.slopeTilt(across, 1 / 60);
+  assert.ok(Math.abs(across.slopeRoll - a) < 1e-3, `roll ${across.slopeRoll}`);
+  assert.ok(Math.abs(across.slopePitch) < 1e-3);
+  const steep = ent(Math.PI / 2);
+  controller.world.normalAt = () => [-Math.sin(1.2), Math.cos(1.2), 0];
+  for (let i = 0; i < 200; i++) controller.slopeTilt(steep, 1 / 60);
+  assert.ok(Math.abs(steep.slopePitch) <= 0.5 + 1e-9, 'tilt is limited');
+  const eased = ent(Math.PI / 2);
+  controller.world.normalAt = () => [-Math.sin(a), Math.cos(a), 0];
+  controller.slopeTilt(eased, 1 / 60);
+  assert.ok(Math.abs(eased.slopePitch) < Math.abs(a) * 0.5, 'one frame only moves part of the way');
+});

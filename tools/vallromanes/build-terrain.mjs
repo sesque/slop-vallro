@@ -3,7 +3,7 @@
 // Two tiers: `fine` over the BUE core (bbox + margin) and `coarse` over the whole download window. Each vertex is
 // the box average of the 1 m source pixels centred on that vertex. Heights are quantised to 5 cm above H0 and stored
 // as int16 residuals of a planar predictor (left + up - upLeft), which gzip compresses well (about 3 MB in all).
-// Road profiles are burned into the grid later, in phase 4, once the road graph exists.
+// The road profiles of data/roads.json (build-roads.mjs) are burned into both tiers before they are quantised.
 // Writes data/terrain.bin (int16 residuals per tier, little-endian) and data/terrain.json; throws if the BUE spot-height quality gate fails.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -12,6 +12,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { E0, N0, H0 } from './frame.mjs';
 import { readBue } from './read-bue.mjs';
 import { createTerrainSampler, decodeHeights, decodePlanar } from '../../js/geo/terrain-sampler.js';
+import { burnRoads } from './burn-roads.mjs';
+import { ROAD_DEPTH } from '../../js/world/street-geometry.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const RAW = path.join(root, 'tools/data/vallromanes/raw');
@@ -89,7 +91,7 @@ export function encodeHeights(hAbs) {
 }
 
 // Builds a tier covering the local-frame rectangle [minX, maxX] × [minZ, maxZ] (snapped to the tier's cell grid).
-export function buildTier(dem, name, cell, rect) {
+export function buildTier(dem, name, cell, rect, roads = null) {
   const { meta, heights } = dem;
   // local x = E - E0, local z = N0 - N; source pixel column = E - originE, row = originN - N.
   const colOfX = (x) => x + E0 - meta.originE;
@@ -101,7 +103,11 @@ export function buildTier(dem, name, cell, rect) {
   const w = (c1 - c0) / cell + 1;
   const h = (r1 - r0) / cell + 1;
   const abs = resampleBox(heights, meta.width, meta.height, cell, c0, r0, w, h, meta.nodata);
+  const minX = c0 + meta.originE - E0, minZ = r0 + N0 - meta.originN;
+  // roads are in local y (H - H0); the grid holds absolute H here, hence base = H0
+  const burned = roads ? burnRoads(abs, { minX, minZ, cell, w, h }, roads, { base: H0, depth: ROAD_DEPTH }) : 0;
   return {
+    burned,
     name, cell, width: w, height: h,
     minX: c0 + meta.originE - E0,
     minZ: r0 + N0 - meta.originN,
@@ -158,7 +164,11 @@ function main() {
   }
   const core = { minX: minE - coreMargin - E0, maxX: maxE + coreMargin - E0, minZ: N0 - (maxN + coreMargin), maxZ: N0 - (minN - coreMargin) };
 
-  const tiers = [buildTier(dem, 'fine', fineCell, core), buildTier(dem, 'coarse', coarseCell, full)];
+  const roadsFile = path.join(root, 'data/roads.json');
+  const roads = fs.existsSync(roadsFile) ? JSON.parse(fs.readFileSync(roadsFile, 'utf8')).edges : null;
+  if (!roads) console.warn('WARNING: data/roads.json not found, terrain is not flattened under roads (run build-roads.mjs first)');
+  const tiers = [buildTier(dem, 'fine', fineCell, core, roads), buildTier(dem, 'coarse', coarseCell, full, roads)];
+  if (roads) console.log(`Road profiles burned into the terrain: ${tiers.map((t) => `${t.name} ${t.burned} vertices`).join(', ')}`);
   const sampler = createTerrainSampler(tiers.map((t) => ({ ...t, heights: decodeHeights(t.u16, SCALE) })));
 
   const report = {};

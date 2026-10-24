@@ -5,11 +5,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { E0, N0, toLocal } from './frame.mjs';
+import { reverseRing, signedArea } from '../../js/geo/polygon.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const RAW = path.join(root, 'tools/data/vallromanes/raw/boundary');
 export const DEFAULT_SRC = path.join(RAW, 'dl/divisions-administratives-v2r2-municipis-5000-20260120.json');
 export const DEFAULT_OUT = path.join(RAW, 'vallromanes-boundary.json');
+export const RUNTIME_OUT = path.join(root, 'data/boundary.json');
 export const INE = '08296';
 
 // Transverse Mercator, GRS80, zone 31N (central meridian 3°E, k0 0.9996). ETRS89 and WGS84 differ by less than
@@ -109,6 +111,18 @@ function main() {
     bboxUtm: { minE: s.minE, maxE: s.maxE, minN: s.minN, maxN: s.maxN }, areaKm2: s.areaKm2,
     utm, local
   }));
+  // Runtime copy: the outer ring(s) in the local frame, oriented with a positive signed area (see js/geo/polygon.js)
+  const rings = local.map((poly) => {
+    const flat = poly[0].slice(0, -1).flat(); // drop the repeated closing vertex
+    return signedArea(flat) >= 0 ? flat : reverseRing(flat);
+  });
+  fs.mkdirSync(path.dirname(RUNTIME_OUT), { recursive: true });
+  fs.writeFileSync(RUNTIME_OUT, JSON.stringify({
+    source: 'ICGC Divisions administratives v2r2-20260120, 1:5000, CC BY 4.0',
+    ine: INE, name: properties.NOMMUNI, frame: { E0, N0, crs: 'EPSG:25831' }, areaKm2: +s.areaKm2.toFixed(4),
+    rings: rings.map((r) => r.map((v) => +v.toFixed(2)))
+  }));
+  console.log(`runtime boundary: ${rings.map((r) => r.length / 2).join(' + ')} vertices -> ${RUNTIME_OUT}`);
   console.log(`${properties.NOMMUNI} (INE ${INE}): ${s.vertices} vertices, area ${s.areaKm2.toFixed(3)} km² (declared ${declared})`);
   console.log(`bbox E ${s.minE.toFixed(1)} → ${s.maxE.toFixed(1)}, N ${s.minN.toFixed(1)} → ${s.maxN.toFixed(1)} (${(s.maxE - s.minE).toFixed(0)} × ${(s.maxN - s.minN).toFixed(0)} m)`);
   console.log(`written ${out}`);

@@ -168,6 +168,20 @@ index contour labels 331.
   - Ground relief around a footprint is a median 2.5 m (P90 4.7 m), so the choice of ground reference matters: top minus the uphill ground is 4.6 m, minus the downhill ground 7.2 m. The 7.4 m of §3.4 used the lowest nearby spot height (downhill bias); the 5.1 m used the DTM at the centroid (under the building).
   - **Conclusion:** the BUE tops are sound. Typical houses are about 6 m to the mean roof and about 7 m to the ridge. Use the DTM ring as ground reference, not the centroid.
 
+### 3.6 What the building polygons contain (measured)
+- **Survey coverage:** `MED_06LP_PL` (1 polygon, 3 912 vertices) is the perimeter of the surveyed area: **4.90 km², 46.3 % of the municipality's 10.57 km²**. The other 54 % has no BUE data (Catastro footprints, Phase 8).
+- All outer rings are counter-clockwise in UTM (clockwise once z = −N). 89 buildings have extra parts, and all 103 of them are **courtyards (holes)** inside their building, never separate pieces. Z is constant per polygon for every structure kind.
+- 4 313 structures are baked after removing 2 outside the boundary: 2 906 buildings, 836 sheds, 316 porches, 81 canopies, 98 construction, 31 tanks, 14 ruins, 15 greenhouses, 7 under construction, 5 monuments, 3 cemetery, 1 tower. Simplifying to 0.1 m cuts 35 892 vertices to 26 085.
+- Heights above the lowest ground at the footprint: buildings P10 3.0, **P50 6.0**, P90 9.8 m; floors (3 m) 1: 1 190, 2: 1 162, 3: 463, 4+: 91. 1 566 buildings are nearly rectangular and get a hip roof.
+- **Flags:** 126 of 2 906 buildings (4.3 %) are flagged for review, against the 1 % gate of spec §8, almost all as "buried" (BUE top within 0.3 m of the highest ground at the footprint; 41 even stay below the median ground). Sheds, tanks and construction are flagged far more often. The LiDAR surface model can replace these tops in Phase 8.
+
+### 3.7 What the street data gives (measured)
+- **Centrelines:** 125 paved urban lines (31.7 km), 28 unpaved urban (2.4 km), 39 other paved roads (4.2 km), 363 tracks (24.1 km). Their Z agrees with the DTM within 0.2 m (P10 to P90), so they are used as the road profile after smoothing. Grades: median 5.8 %, P90 14 %, max 34 %.
+- **Graph:** 555 lines become 624 edges and 599 nodes (279 endpoint clusters and 242 T-junctions snapped at 0.75 m, 1 crossing, no spurs under 3 m). The largest component holds 98.3 % of the urban length; 51 components in all (isolated tracks).
+- **Kerb (`COM_17`) is the carriageway edge**: found on 85 % of the samples on each side of an urban street, median 3.1 m from the centreline. Urban width P10/P50/P90 = 4.4 / 6.0 / 7.9 m (269 of 289 edges measured); tracks 3.1 m. `COM_03` (pavement limit) and the block outlines lie further out and give the pavement width: both sides on 243 of 289 urban edges, 1.5 m by default.
+- **Names:** `ANGLE` of the street labels is counter-clockwise from east. 129 of 139 labels match an edge running their way within 25 m; propagating straight on at junctions names 243 of 289 urban edges (84 %, 90 % of the length) from the BUE alone. Letting names turn 90° would reach 96 % but names the wrong streets; the remaining 46 edges (3.2 km, median 51 m) are for `overrides/roads.json`.
+- **OSM** (Overpass, 1 049 highways in the municipality box, 840 kB; ODbL, credit in the README): an edge takes the way that stays within 8 m of at least 80 % of it. 392 of 624 edges match (250 of 289 urban); 54 urban edges are one-way, most others default to two-way with one lane each way. Urban speeds: 30 km/h on 274 edges, 50 on 12, 20 on 3; the C-roads carry 50 to 90. OSM names fill 11 gaps, so 257 of 289 urban edges (89 %, 93 % of the length) are named.
+
 ## 4. Decisions so far
 - Primary geometry comes from **BUE 1:1000 SHP**. Building floor counts come from **Catastro**. Terrain comes
   from **ICGC 0.5 m DTM** (BUE contours and spot heights used for validation and fill). Road attributes come

@@ -34,8 +34,8 @@ behind each step are in `spec.md` (section numbers in brackets).
 - [x] `fetch-icgc-dtm.mjs` (replaces the planned `.sh`): reads the municipality plus 200 m window of the ICGC
       Catalonia-wide COG over HTTP range requests. Downloaded level 1 (1 m, 5534 × 3748 px, 83 MB float32) to
       `raw/icgc/dtm/dtm-1m.f32` + `.json`; 0.5 m (level 0) was judged unnecessary.
-- [ ] Treat the boundary as a hard edge: add its segments to the colliders and keep traffic and pedestrians inside
-      (runtime work lands in Phases 3 and 7; the data is prepared here).
+- [x] Boundary as a hard edge: `data/boundary.json` + `confineToRing` keep the player, car, cyclist and helicopter inside
+      the municipal polygon (3 m margin). Traffic and pedestrians stay inside in Phase 7.
 - [x] Re-derived `H0` = 70 m from the DTM window (min 82.65 m). The frame extent is about ±3 km, fine for float32.
 - [x] `build-terrain.mjs`: 2 m grid over the BUE core and 4 m over the whole window (box-averaged from the 1 m DTM),
       quantised to 5 cm, int16 planar-predictor residuals. `data/terrain.bin` is 8.4 MB raw, 3.07 MB gzipped.
@@ -53,23 +53,32 @@ behind each step are in `spec.md` (section numbers in brackets).
 
 ## Phase 3 — Buildings, first pass (spec §5.3)
 - [x] Building height check against LiDAR (DSM − DTM): done, see `knowledge.md` §3.5. BUE tops are mean roof level.
-- [ ] `build-buildings.mjs`: footprints for all building-like kinds; base and top from the DTM and polygon Z;
-      height flags; stable ids.
-- [ ] `js/world/buildings.js`: extruded prisms merged per chunk; plinths down to the lowest ground; simple
-      flat or hip roofs; one generic facade TSL material with procedural windows by floor.
-- [ ] Polygon colliders in a spatial grid; adapt `resolveHorizontalCollision`.
+- [x] `build-buildings.mjs`: 4 313 structures of 12 kinds with courtyards, base/baseMax/top from the baked terrain and
+      polygon Z, floors, hip/flat roof, review flags, stable ids -> `data/buildings.json` + `.bin` (0.77 MB raw).
+      `npm run geodata` now runs boundary, terrain and buildings and writes `data/manifest.json`.
+- [x] `js/world/buildings.js` + `building-geometry.js`: 82 merged chunks (78k triangles), plinths below the lowest
+      ground, flat and hip roofs, porches/canopies as slabs, ruins as low walls, one facade TSL material (plaster palette
+      by seed, window grid by floor, tile/gravel roofs, lit windows at night).
+- [x] Polygon colliders (3 916, courtyards stay open): controllers get `pushOut` outlines in the existing 48 m collider
+      cells; circle test for person/bike/helicopter, three circles for the car; teleports respect the real outline.
 - [ ] Visual check against the street guide viewer and the orthophoto.
 
 **Milestone B:** a recognisable town. You can walk the streets between real houses.
 
 ## Phase 4 — Streets (spec §5.4)
-- [ ] Graph construction, snapping and splitting, with a connectivity report.
-- [ ] Widths from kerbs; names from `TOP_05` labels; `fetch-osm.sh` and attribute matching; `overrides/roads.json`.
-- [ ] Carriageway and pavement polygons draped on the terrain; burn the road profile into the terrain grid.
-- [ ] `js/world/streets.js`: asphalt, kerbs, pavements, markings (reuse `road-paint` ideas).
-- [ ] The car and cyclist drive on real slopes (pitch and roll from `normalAt`).
+- [x] Graph construction (`road-graph.mjs`): snap at 0.75 m, split at T-junctions and crossings, merge chains, drop spurs,
+      connectivity report (98.3 % of the urban length in one component).
+- [x] Widths from kerbs, pavements from the limit/facade lines, names from `TOP_05` labels (84 % of urban edges, 90 % of
+      the length), smooth height profile, `overrides/roads.json` -> `data/roads.json` (`build-roads.mjs`).
+- [x] OSM attributes: `fetch-osm.mjs` downloaded 1 049 highways (840 kB, Overpass, ODbL) and `osm-match.mjs` copied oneway,
+      lanes, maxspeed and highway class onto 392 of 624 edges (250 of 289 urban); pedestrian-only ways are ignored for roads.
+- [x] Surfaces are built at runtime as ribbons along each edge (carriageway, kerb face, pavement, junction discs) at the
+      profile height; `burn-roads.mjs` flattens the terrain under the roads and buries it 10 cm below the profile.
+- [x] `js/world/streets.js` + `street-geometry.js`: asphalt, dirt, kerbs, jointed pavements cut back at junctions, centre
+      line dashes; `js/geo/road-index.js` gives pavement height for walkers and street names for the HUD.
+- [x] The car and cyclist tilt to the slope (`slopeTilt` in `controllers.js`, from `world.normalAt`, limited to 0.5 rad).
 
-**Milestone C:** drive the taxi through Vallromanes.
+**Milestone C:** drive the taxi through Vallromanes. *Reached (open `index.html?terrain`, press 2).*
 
 ## Phase 5 — Features and props (spec §5.5–5.6)
 - [ ] Walls and retaining walls (height from terrain), fences, railings, hedges.

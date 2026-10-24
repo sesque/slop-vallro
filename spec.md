@@ -150,7 +150,9 @@ All stages are Node ≥ 20 ESM. They are deterministic, log an inventory, and th
 - `floors`: from Catastro, joining by largest-area overlap with BuildingParts. Otherwise use
   `round(height / 3.0)`.
 - Roofs:
-  - Phase 3: flat, or a simple hip using the building's extrusion height.
+  - Phase 3 (done): hip roof when the footprint fills at least 80 % of its minimum oriented rectangle (no courtyard, at most
+    16 vertices, at least 3 m wide), otherwise flat. The ridge runs along the long axis with 45° hips; the rise is
+    0.35 × the half width (0.6–2.2 m), the eave 55 % of it below `top` and the ridge 45 % above.
   - Phase 8: use `CON_29_LN` ridge lines plus `CON_29_PT` slope arrows (`ANGLE`) to build gable/hip roofs.
     Optionally fit roof planes to the LiDAR points.
 - Facade style comes from the POUM zone and the floor count. For example, the village core gets stuccoed
@@ -174,9 +176,11 @@ All stages are Node ≥ 20 ESM. They are deterministic, log an inventory, and th
   text `ANGLE` (mod 180°). Propagate along same-name chains.
 - **Traffic attributes:** match to OSM ways by Hausdorff distance under 8 m. Copy `oneway`, `lanes` and
   `maxspeed`. Defaults: two-way, one lane each way, 30 km/h urban.
-- **Surfaces:** carriageway polygons are the area between kerbs where available; otherwise use a buffer of
-  the centreline. Pavement polygons are the area between the kerb and the pavement limit or a building
-  facade. Everything is draped on the terrain.
+- **Surfaces:** built at runtime as ribbons along each edge from `halfL/halfR` (the median kerb distance per side) and
+  `swL/swR` (kerb to the first pavement limit, block outline or facade, 0.8 to 3 m, 1.5 m by default), at the smooth
+  profile height. The terrain under a corridor is baked to the profile minus `ROAD_DEPTH` (10 cm) so it never pokes
+  through; the asphalt rides 4 cm above the profile, pavements 14 cm above that. Pavements and the centre line stop
+  at junctions (the other roads' half width + 0.4 m).
 - Output: `nodes[] {id, x, y, z}`, `edges[] {id, a, b, polyline, width, class, name, oneway, lanes,
   speed}`, plus surface polygons.
 

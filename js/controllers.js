@@ -250,15 +250,52 @@ class ThirdPersonControllerManager {
     for (const action of Object.keys(this.keys)) this.keys[action] = false;
   }
 
-  // Swaps Manhattan for another world: { groundHeight(x, z, mode), bounds: { minX, maxX, minZ, maxZ } }. The bounds are a
-  // hard edge for every mode (no island shore, no harbour for the helicopter).
+  // Swaps Manhattan for another world: { groundHeight(x, z, mode), bounds: { minX, maxX, minZ, maxZ }, confine?(x, z),
+  // normalAt?(x, z) }; with normalAt the car and the bike tilt to the slope.
+  // The bounds are a hard edge for every mode (no island shore, no harbour for the helicopter); `confine` replaces
+  // the box with an exact outline (the municipal boundary) and returns the nearest allowed { x, z }.
   setWorld(world) {
     this.world = world;
   }
 
   clampToWorld(x, z) {
-    const b = this.world.bounds;
+    const w = this.world;
+    if (w.confine) return w.confine(x, z);
+    const b = w.bounds;
     return { x: Math.max(b.minX, Math.min(b.maxX, x)), z: Math.max(b.minZ, Math.min(b.maxZ, z)) };
+  }
+
+  // Tilts a vehicle to the slope it stands on when the world provides normalAt(x, z): pitch along its heading (nose up
+  // on a climb) and roll across it, eased so the body does not snap over terrain bumps. See the entity loop in update().
+  slopeTilt(e, dt) {
+    const n = this.world.normalAt(e.position.x, e.position.z);
+    const sinH = Math.sin(e.heading), cosH = Math.cos(e.heading);
+    const limit = 0.5;
+    const pitch = Math.max(-limit, Math.min(limit, Math.atan2(n[0] * sinH + n[2] * cosH, n[1])));
+    const roll = Math.max(-limit, Math.min(limit, -Math.atan2(n[0] * cosH - n[2] * sinH, n[1])));
+    const k = Math.min(1, dt * 8);
+    e.slopePitch = (e.slopePitch || 0) + (pitch - (e.slopePitch || 0)) * k;
+    e.slopeRoll = (e.slopeRoll || 0) + (roll - (e.slopeRoll || 0)) * k;
+  }
+
+  // Colliders with `pushOut(x, z, r)` (a real outline, see js/world/buildings.js) are tested as circles against it: one
+  // for the person, the bike and the helicopter, three along the body for the car. Moves `pos` clear of the outline
+  // and returns the push direction, or null if nothing overlaps.
+  pushOutOfOutline(c, pos, radius, carEntity, sinH, cosH) {
+    const circles = carEntity ? [[-1.3, 0.95], [0, 0.95], [1.3, 0.95]] : [[0, radius]];
+    let nx = 0;
+    let nz = 0;
+    let hit = false;
+    for (const [offset, r] of circles) {
+      const push = c.pushOut(pos.x + sinH * offset, pos.z + cosH * offset, r);
+      if (!push) continue;
+      pos.x += push.x - (pos.x + sinH * offset);
+      pos.z += push.z - (pos.z + cosH * offset);
+      nx = push.nx;
+      nz = push.nz;
+      hit = true;
+    }
+    return hit ? { nx, nz } : null;
   }
 
   setMode(mode) {
@@ -359,6 +396,7 @@ class ThirdPersonControllerManager {
       for (const c of this.nearColliders(p.x, p.z, reach)) {
         if (y > c.maxY + 1.5) continue;
         if (p.x + extX <= c.minX || p.x - extX >= c.maxX || p.z + extZ <= c.minZ || p.z - extZ >= c.maxZ) continue;
+        if (c.pushOut && !c.pushOut(p.x, p.z, reach)) continue; // outside the real outline, if not its bounding box
         if (c.obb) {
           const o = c.obb, dx = p.x - o.cx, dz = p.z - o.cz;
           const ls = sinH * o.cs - cosH * o.sn, lc = sinH * o.sn + cosH * o.cs;
@@ -894,7 +932,12 @@ class ThirdPersonControllerManager {
       ) {
         let nx = 0;
         let nz = 0;
-        if (c.obb) {
+        if (c.pushOut) {
+          const hit = this.pushOutOfOutline(c, pos, radius, carEntity, sinH, cosH);
+          if (!hit) continue;
+          nx = hit.nx;
+          nz = hit.nz;
+        } else if (c.obb) {
           // Oriented box (buildings along a non-grid street; min/max are its world bounds): push out in its own frame
           const o = c.obb;
           const dx = pos.x - o.cx;
@@ -1049,6 +1092,11 @@ class ThirdPersonControllerManager {
       const e = this.entities[key];
       e.mesh.position.copy(e.position);
       e.mesh.rotation.y = e.heading;
+      if (this.world?.normalAt && (key === 'car' || key === 'cyclist')) {
+        e.mesh.rotation.order = 'YXZ'; // heading first, then the slope's pitch and roll in the vehicle's own frame
+        e.mesh.rotation.x = e.slopePitch || 0;
+        e.mesh.rotation.z = e.slopeRoll || 0;
+      }
     }
 
     // Modulate clustered vehicle & bike lights by time of day (off during Midday & Golden Hour; fade in at Dusk & Night)
@@ -1139,6 +1187,7 @@ class ThirdPersonControllerManager {
 
     this.resolveHorizontalCollision(c.position, 1.35, 1.0, c);
     c.position.y = this.getGroundHeight(c.position.x, c.position.z, 'car');
+    if (this.world?.normalAt) this.slopeTilt(c, dt);
 
     // 3-DOF Spring-Damper Chassis Suspension (Pitch, Roll & Vertical Heave)
     const targetPitch = -Math.max(-1, Math.min(1, acceleration / CAR_DRIVE.acceleration)) * 0.026;
@@ -1192,6 +1241,7 @@ class ThirdPersonControllerManager {
     b.position.z += Math.cos(b.heading) * b.speed * dt;
     this.resolveHorizontalCollision(b.position, 0.65, 1.0, null, b);
     b.position.y = this.getGroundHeight(b.position.x, b.position.z, 'cyclist');
+    if (this.world?.normalAt) this.slopeTilt(b, dt);
 
     const targetLean = -turnInput * Math.min(1.0, Math.abs(b.speed) / 9.0) * 0.34;
     b.leanAngle += (targetLean - b.leanAngle) * Math.min(1, dt * 9);

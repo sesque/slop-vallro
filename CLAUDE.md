@@ -34,11 +34,12 @@ Read these before working:
 - Credit the data sources in `README.md` (ICGC CC BY 4.0, Catastro CC BY 4.0, OSM ODbL, Diputació de
   Barcelona per its terms).
 
-## Common commands (to be created in plan phase 0–1)
+## Common commands
 
 ```bash
 npm run inventory   # report on raw BUE shapefiles
-npm run geodata     # run the full tools pipeline → data/
+npm run geodata     # bake boundary, roads, terrain and buildings → data/ (+ manifest.json); needs the raw data
+node tools/vallromanes/fetch-osm.mjs   # optional: OSM highways for oneway/lanes/maxspeed (network)
 npm test            # node tests (tests/*.test.*)
 npx serve .         # open http://localhost:3000 in a WebGPU browser; add ?terrain for the Vallromanes terrain demo
 ```
