@@ -76,9 +76,10 @@ city block LOD / lights → street details → lighting → map → audio → cu
 | **Diputació de Barcelona — BUE 1:1000** (Base Urbana Escala 1:1000), municipality 08296 | 3D urban topographic map: buildings, kerbs, centrelines, contours, spot heights, props, names | Urban areas, bbox about 3.9 × 2.7 km | **Delivered as SHP** (`DIBA_35B7D48A_16428.zip`); also DGN v8 (`DIBA_0E83D905_16427.zip`, MicroStation CONNECT v24, not readable by open-source GDAL) | Check the Diputació download terms | ✅ In hand |
 | **Catastro INSPIRE Buildings** (DG Catastro) | Building footprints split into BuildingParts with `numberOfFloorsAboveGround` | All of Spain except the Basque Country and Navarre; Vallromanes listed as **08297-VALLROMANES** under Territorial office 08 Barcelona | ATOM: `http://www.catastro.hacienda.gob.es/INSPIRE/buildings/08/ES.SDGC.bu.atom_08.xml` (per-municipality ZIP of GML); WFS: `https://ovc.catastro.meh.es/INSPIRE/wfsBU.aspx` | CC BY 4.0 | ✅ Confirmed available (feed updated 2026-08-21) |
 | **ICGC Territorial LiDAR** (3rd coverage, 2021–2023) | Classified point cloud, min 8 pts/m² (65% of sheets >10 pts/m²), plus a 15 cm orthoimage | All of Catalonia, 1×1 km sheets | LAS/LAZ download from icgc.cat | CC BY 4.0 | ✅ Covers Vallromanes |
-| **ICGC elevation models** | DTM/DSM at 0.5 m (Catalonia-wide), from LiDAR | All of Catalonia | GeoTIFF | CC BY 4.0 | ✅ |
+| **ICGC elevation models** | DTM/DSM at 0.5 m (Catalonia-wide), from LiDAR 2021–2023 | All of Catalonia | One Cloud Optimized GeoTIFF per resolution (EPSG:25831, float32, nodata −9999, 512 px tiles, overviews 1/2/4/… m), not sheets: `https://datacloud.icgc.cat/datacloud/model-elevacions-terreny/tif_unzip/model-elevacions-terreny-lidar-catalunya-50cm-2021-2023.tif` (422 GB). HTTP range requests work, so only the municipality window is read. | CC BY 4.0 | ✅ Downloaded at 1 m: window 5534 × 3748 px, height 82.65 → 499.49 m (104.07 m minimum inside the boundary). Overview levels carry no georeferencing; use the level-0 origin. |
 | **ICGC Referència Topogràfica Territorial (RTT)** | 1:5000 topographic base, 2023 data | All of Catalonia | GeoPackage 2D/3D, DWG/DGN, IFC | CC BY 4.0 | ✅ For areas outside the BUE |
 | **OpenStreetMap** (Overpass) | Road attributes (oneway, lanes, maxspeed), POIs | Global | Overpass API (see upstream `tools/overpass.sh`) | ODbL | ⚠️ Not checked; small-town tagging may be sparse |
+| **ICGC Administrative divisions** v2r2-20260120 | Municipal boundary polygons, 1:5000 official scale (generalised 1:50k to 1:1M also available) | All of Catalonia | GeoJSON/SHP/GPKG/DWG zip, WMS/WFS: `https://datacloud.icgc.cat/datacloud/divisions-administratives/json/divisions-administratives-v2r2-20260120.zip` | CC BY 4.0 | ✅ Downloaded. Vallromanes = `CODIMUNI 082969`, 1 polygon, 1 104 vertices, 10.570 km² (matches the declared `AREAM5000`). GeoJSON is lon/lat with 5 decimals (about 1 m). Bbox E 439 049 → 444 181, N 4 595 979 → 4 599 326 (5.1 × 3.3 km). |
 | **POUM Vallromanes, sheet O.9 "Ordenació"** (2008) | Zoning map with zone codes (5a, 20, 22b, 32, …) over an old topographic base | Whole municipality | Single A1 vector PDF from DGN, text outlined (no fonts), not georeferenced | — | ⚠️ Reference only: use zone types to choose building styles. Prefer a georeferenced POUM from the Generalitat MUC/RPUC open data if available. |
 | **Diputació street guide** | Web viewer of the street guide built on BUE + SITMUN | Municipality | `https://sitmun.diba.cat/sitmun_gca/?mun_ine=08296` | — | Viewer only; useful for visual checking |
 
@@ -157,6 +158,16 @@ index contour labels 331.
 
 ---
 
+### 3.5 DTM versus BUE (measured)
+- BUE spot heights (`ORO_03`, 5 909 away from buildings) against the 1 m DTM: median |Δ| 0.14 m, P95 0.70 m, max 6.7 m, mean signed −0.07 m. Passes the spec §8 gate (median < 0.3, P95 < 1).
+- Building top (`ORO_05`) minus DTM at the centroid: P10 2.6 m, median 5.1 m, P90 8.6 m (n = 2 908). That looked low against the 7.4 m of §3.4, so it was checked against the ICGC LiDAR surface model (DSM, 1 m, same 2021–2023 flight, `fetch-icgc-dtm.mjs --product dsm --level 0`).
+- **Building height check** (1 807 of 2 908 footprints analysed: at least 6 DSM pixels more than 1 m inside the walls and 6 DTM pixels 1.5–3.5 m outside; smaller or tightly packed ones were skipped):
+  - BUE top minus the **median LiDAR roof height** in the footprint: median +0.37 m, P90 +0.99 m. The BUE top is the **mean roof level**, not the eave and not the ridge.
+  - BUE top minus the LiDAR ridge (98th percentile): median −0.21 m, P10 −3.1 m (pitched roofs have a ridge above the top). Eaves (2nd percentile) are a median 0.85 m below the top.
+  - Height above surrounding ground (DTM ring 1.5–3.5 m outside the walls): BUE top P50 **6.0 m** (P10 2.9, P90 9.1); LiDAR median roof 5.8 m, ridge 6.9 m.
+  - Ground relief around a footprint is a median 2.5 m (P90 4.7 m), so the choice of ground reference matters: top minus the uphill ground is 4.6 m, minus the downhill ground 7.2 m. The 7.4 m of §3.4 used the lowest nearby spot height (downhill bias); the 5.1 m used the DTM at the centroid (under the building).
+  - **Conclusion:** the BUE tops are sound. Typical houses are about 6 m to the mean roof and about 7 m to the ridge. Use the DTM ring as ground reference, not the centroid.
+
 ## 4. Decisions so far
 - Primary geometry comes from **BUE 1:1000 SHP**. Building floor counts come from **Catastro**. Terrain comes
   from **ICGC 0.5 m DTM** (BUE contours and spot heights used for validation and fill). Road attributes come
@@ -169,6 +180,8 @@ index contour labels 331.
 1. Survey or flight date of the BUE (ask the Diputació or check the metadata).
 2. Diputació licence and redistribution terms, especially whether derived data can be published on GitHub
    Pages.
-3. Whether to model areas outside the BUE (forest, Serralada de Marina) using the ICGC DTM and RTT.
+3. ~~Whether to model areas outside the BUE~~ **Decided: the whole municipality is the world.** Open: the source of
+   the boundary polygon, and which lower-detail sources fill the area outside the BUE (ICGC DTM and RTT, Catastro
+   footprints, OSM, LiDAR tree cover).
 4. The local origin point (proposal: near the Ajuntament; see `spec.md` §2).
 5. Exact meaning of the LTP, ES and LN suffixes (from the CT-1M v2.2 dictionary).

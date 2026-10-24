@@ -6,7 +6,7 @@ behind each step are in `spec.md` (section numbers in brackets).
 ---
 
 ## Phase 0 — Setup
-- [ ] Fork `mrdoob/slop-newyork` → `slop-vallromanes`. Add `CLAUDE.md`, `knowledge.md`, `spec.md` and `plan.md`
+- [ ] Fork `mrdoob/slop-newyork` → `slop-vallro`. Add `CLAUDE.md`, `knowledge.md`, `spec.md` and `plan.md`
       to the root.
 - [ ] Pin three.js to an exact released version in `index.html` (both `three` and `three/webgpu`, plus `tsl`
       and `addons`). Confirm the NYC build still runs.
@@ -28,17 +28,31 @@ behind each step are in `spec.md` (section numbers in brackets).
 **Done when:** `npm run inventory` reproduces the known counts (2 908 buildings, 153 urban centrelines, …).
 
 ## Phase 2 — Terrain (spec §5.2)
-- [ ] `fetch-icgc-dtm.sh`: download the 0.5 m DTM tiles covering the bbox plus a 200 m margin.
-- [ ] `build-terrain.mjs`: mosaic, clip, resample to 2 m (1 m in the core if the size allows), encode as uint16.
-- [ ] Validate against the BUE spot heights (quality gate spec §8). Optional TIN fallback from contours.
-- [ ] Runtime: `js/geo/load-geodata.js`, `terrain-sampler.js` and `js/world/terrain.js` (chunked mesh, LOD,
-      TSL ground material).
-- [ ] Temporarily strip NYC builders from `main.js` behind a flag. Show only terrain plus the walking person
-      using `heightAt`.
+- [x] Obtain the municipal boundary polygon (INE 08296) and store it in `raw/boundary/`. Source: ICGC administrative
+      divisions v2r2-20260120, 1:5000, CC BY 4.0. `tools/vallromanes/build-boundary.mjs` writes it in EPSG:25831
+      and in the local frame.
+- [x] `fetch-icgc-dtm.mjs` (replaces the planned `.sh`): reads the municipality plus 200 m window of the ICGC
+      Catalonia-wide COG over HTTP range requests. Downloaded level 1 (1 m, 5534 × 3748 px, 83 MB float32) to
+      `raw/icgc/dtm/dtm-1m.f32` + `.json`; 0.5 m (level 0) was judged unnecessary.
+- [ ] Treat the boundary as a hard edge: add its segments to the colliders and keep traffic and pedestrians inside
+      (runtime work lands in Phases 3 and 7; the data is prepared here).
+- [x] Re-derived `H0` = 70 m from the DTM window (min 82.65 m). The frame extent is about ±3 km, fine for float32.
+- [x] `build-terrain.mjs`: 2 m grid over the BUE core and 4 m over the whole window (box-averaged from the 1 m DTM),
+      quantised to 5 cm, int16 planar-predictor residuals. `data/terrain.bin` is 8.4 MB raw, 3.07 MB gzipped.
+- [x] Validated against the BUE spot heights: fine tier median 0.143 m, P95 0.696 m (gate 0.3 / 1.0). The build fails
+      if the gate fails. The optional contour TIN fallback was not needed.
+- [ ] Burn road profiles into the terrain grid (moved to Phase 4, needs the road graph).
+- [x] Runtime `js/geo/load-geodata.js` (`loadTerrain`) and `js/geo/terrain-sampler.js` (`heightAt`, `normalAt`).
+- [x] Runtime `js/world/terrain.js`: 345 chunks of 256 m, three levels (2 m / 8 m / 32 m vertex spacing, switched at
+      380 m and 1.4 km with hysteresis), skirts, TSL ground material (grass, dry grass, soil, rock by slope and height).
+- [x] `?terrain` flag: `main.js` loads `js/terrain-demo.js` instead of `initApp()`. It shows only the terrain with the
+      four player modes; `controllers.js` got a `setWorld({ groundHeight, bounds })` hook (ground from `heightAt`, bounds
+      as a hard edge). NYC builders are not touched.
 
-**Milestone A:** walk and fly over the real Vallromanes landscape.
+**Milestone A:** walk and fly over the real Vallromanes landscape. *Reached (open `index.html?terrain`).*
 
 ## Phase 3 — Buildings, first pass (spec §5.3)
+- [x] Building height check against LiDAR (DSM − DTM): done, see `knowledge.md` §3.5. BUE tops are mean roof level.
 - [ ] `build-buildings.mjs`: footprints for all building-like kinds; base and top from the DTM and polygon Z;
       height flags; stable ids.
 - [ ] `js/world/buildings.js`: extruded prisms merged per chunk; plinths down to the lowest ground; simple
@@ -89,8 +103,8 @@ behind each step are in `spec.md` (section numbers in brackets).
 - [ ] Facade and material styles by POUM zone (hand-digitised `overrides/zoning.geojson`, or the official
       georeferenced POUM).
 - [ ] Special buildings: a hand-modelled or parameterised church, Ajuntament, school and farmhouses ("Can …").
-- [ ] Optional: forest and the surrounding hills outside the BUE, from the ICGC DTM and RTT plus instanced
-      woodland.
+- [ ] Rest of the municipality outside the BUE (required, not optional): roads and tracks from RTT/OSM, buildings
+      from Catastro footprints, forest and farmland from RTT/LiDAR with instanced woodland, at lower detail.
 
 ## Phase 9 — Performance, polish and release
 - [ ] Chunk culling and shadow proxies through `scene-culling.js`; terrain LOD tuning; check draw call and

@@ -748,4 +748,9 @@ async function initApp() {
   });
 }
 
-initApp();
+// ?terrain shows only the Vallromanes terrain (plan phase 2); everything else is still New York until the later phases.
+if (new URLSearchParams(location.search).has('terrain')) {
+  import('./terrain-demo.js').then((demo) => demo.initTerrainDemo());
+} else {
+  initApp();
+}

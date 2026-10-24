@@ -4,8 +4,14 @@ Status: draft v0.1. Source facts are in `knowledge.md`.
 
 ## 1. Goals and non-goals
 
+**Scope:** the world is the **whole municipality** (INE 08296), clipped to its official boundary polygon plus a
+small terrain buffer beyond it. The boundary is a **hard edge**: the player, vehicles and pedestrians are
+constrained inside the polygon (a collision wall along the boundary segments), and the buffer is only visual. The BUE 1:1000 (about 3.9 × 2.7 km, urban areas only) is the
+high-detail core; everything else uses lower-detail sources (ICGC DTM, RTT, OSM, LiDAR-derived tree cover).
+
 **Goals**
-- A walkable, drivable, flyable simulation of Vallromanes's urban area that is faithful to real geometry:
+- A walkable, drivable, flyable simulation of Vallromanes (urban core in full detail, the rest of the
+  municipality at lower detail) that is faithful to real geometry:
   terrain, buildings with real footprints and heights, streets, pavements, walls, stairs, trees and lamps.
 - Same tech and spirit as upstream: three.js WebGPU + TSL, no bundler, data pre-baked offline, nothing fetched
   from third parties at runtime except the pinned three.js (which can optionally be vendored).
@@ -24,16 +30,19 @@ Status: draft v0.1. Source facts are in `knowledge.md`.
   - `z = −(N − N0)` (north is −z, the three.js and upstream convention)
   - `y = H − H0` (up), where H is orthometric height in metres (ETRS89 / Alicante heights)
 - Origin constants live in `tools/vallromanes/frame.mjs` and are copied into the generated manifest.
+  - The frame covers the whole municipality, so the extent can be several times the ±2.5 km assumed below;
+    float32 precision still holds (about 1 mm at 10 km) but check it once the boundary is known.
   - Proposal: `E0, N0` at the Ajuntament label point, rounded to the metre (find it in `t`, `TOP_09EQ`
     "Ajuntament"). Alternatively use the bbox centre, about (441 450, 4 598 000).
-  - `H0` is the round-number 10 m floor below the minimum DTM height in the area. This keeps `y ≥ 0`.
+  - `H0` is the round-number 10 m floor below the minimum DTM height **over the whole municipality** (not the
+    BUE area). Current value: 70 m, from the DTM window minimum of 82.65 m. This keeps `y ≥ 0`.
 - **No rotation.** Unlike Manhattan, there is no dominant grid.
 - Precision: a ±2.5 km extent in float32 gives about 0.25 mm resolution, which is fine.
 
 ## 3. Repository organisation
 
 ```
-slop-vallromanes/                 (fork of mrdoob/slop-newyork)
+slop-vallro/                 (fork of mrdoob/slop-newyork)
 ├─ CLAUDE.md  knowledge.md  spec.md  plan.md  README.md (with attribution)
 ├─ index.html                     import map: three pinned to an exact version
 ├─ js/
@@ -97,6 +106,7 @@ Upstream NYC modules (`city-grid`, `boroughs`, `landmarks`, `buildings`, `road-n
 | Catastro BU GML (08297) | `raw/catastro/*.gml` | `numberOfFloorsAboveGround` per BuildingPart; use; year |
 | OSM extract | `raw/osm/vallromanes.json` | oneway, lanes, maxspeed, highway class, POIs |
 | POUM zoning | `overrides/zoning.geojson` (hand-digitised or official) | Facade and material style per zone |
+| Municipal boundary (INE 08296) | `raw/boundary/*.geojson` | Playable extent, terrain clip, map frame. Source to be chosen (ICGC administrative divisions, Cadastre or Diputació) |
 | Overrides | `overrides/*.json` | Manual corrections keyed by stable ids |
 
 **Stable ids:** each output feature gets an id equal to a hash of its CAS plus its rounded geometry, so
@@ -114,11 +124,16 @@ All stages are Node ≥ 20 ESM. They are deterministic, log an inventory, and th
 - Strip `_C` suffixes into a flag `fieldRevised: true`. Keep `LS/LN/ES` as `ltp` or `elevated` flags.
 
 ### 5.2 build-terrain
-- **Primary:** mosaic and clip the ICGC DTM to the bbox plus a 200 m margin (`geotiff` npm package).
+- **Primary:** mosaic and clip the ICGC DTM to the **municipal boundary bbox plus a 200 m margin** (`geotiff`
+  npm package). Two resolution tiers: the BUE core at 1–2 m, the rest of the municipality at 4–8 m (the
+  coarse 8 m grid below doubles as the far tier).
 - **Fallback/validation:** build a constrained TIN from contours (`ORO_01/02`), spot heights (`ORO_03/04`) and
   breaklines (`MED_06*`, `MED_05*`, LTP elements). Report RMS and max difference against the DTM.
 - Output grid: **1 m** in the core urban area or **2 m** everywhere (decide in phase 2 based on size).
-  - Encoding: uint16 with `h = H0 + v * 0.01` (1 cm steps).
+  - Encoding: heights quantised to 5 cm above `H0` (`y = q * 0.05`, max error 2.5 cm), stored as int16 residuals of
+    a planar predictor (`q - (left + up - upLeft)`) so gzip reaches about 3 MB for both tiers. Plain 1 cm uint16 was
+    7.4 MB gzipped. Two tiers: 2 m over the BUE bbox + 100 m, 4 m over the whole download window.
+    The server must send `terrain.bin` gzip-compressed, otherwise it is 8.4 MB.
   - Size check: 4.3 × 3.1 km at 2 m is 3.3 M samples, about 6.7 MB raw and about 3 MB gzipped.
 - Burn road surfaces into the grid. Within the road polygons, flatten the cross-slope to the centreline
   height profile, so vehicles don't tilt on terrain noise.
@@ -127,7 +142,9 @@ All stages are Node ≥ 20 ESM. They are deterministic, log an inventory, and th
 ### 5.3 build-buildings
 - Sources: `CON_01pol_PL` (buildings), plus shed, porch, canopy, greenhouse, ruins, covered tank and
   construction polygons as separate `kind`s.
-- `top = polygon Z`. `base = min(DTM sampled at the footprint vertices and centroid)`. Also store
+- `top = polygon Z`; this is the **mean roof level** (validated against LiDAR, knowledge.md §3.5), not the eave or
+  ridge. For pitched roofs set the eave about 0.85 m below `top` and take the ridge from `CON_29` or the LiDAR DSM.
+  `base = min(DTM sampled at the footprint vertices and centroid)`. Also store
   `baseMax` so the plinth can be extruded down to the lowest ground on slopes.
 - `height = top − base`, clamped to ≥ 2.2 m. Flag outliers above 30 m or below 2 m for review.
 - `floors`: from Catastro, joining by largest-area overlap with BuildingParts. Otherwise use

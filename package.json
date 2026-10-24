@@ -1,0 +1,20 @@
+{
+  "name": "slop-vallro",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser simulation of Vallromanes (Catalonia), forked from mrdoob/slop-newyork",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "inventory": "node tools/vallromanes/inventory.mjs",
+    "geodata": "node tools/vallromanes/build-geodata.mjs",
+    "test": "node --test tests/*.test.cjs tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "geotiff": "^3.0.5",
+    "three": "0.186.1"
+  }
+}

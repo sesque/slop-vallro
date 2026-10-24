@@ -1,0 +1,56 @@
+{
+  "frame": {
+    "E0": 441417,
+    "N0": 4598030,
+    "H0": 70,
+    "crs": "EPSG:25831"
+  },
+  "encoding": "int16-planar-le",
+  "scale": 0.05,
+  "tiers": [
+    {
+      "name": "fine",
+      "cell": 2,
+      "width": 2037,
+      "height": 1426,
+      "minX": -2007,
+      "minZ": -1395,
+      "offset": 0,
+      "bytes": 5809524
+    },
+    {
+      "name": "coarse",
+      "cell": 4,
+      "width": 1384,
+      "height": 938,
+      "minX": -2569,
+      "minZ": -1497,
+      "offset": 5809524,
+      "bytes": 2596384
+    }
+  ],
+  "bounds": {
+    "minX": -2569,
+    "maxX": 2963,
+    "minZ": -1497,
+    "maxZ": 2251
+  },
+  "maxY": 429.20000000000005,
+  "source": "ICGC Model d'elevacions del terreny LiDAR Catalunya 50 cm 2021-2023 (CC BY 4.0)",
+  "quality": {
+    "fine": {
+      "n": 5909,
+      "median": 0.14298144042487593,
+      "p95": 0.6963296172982751,
+      "max": 6.739733709412235,
+      "mean": -0.07193090903116947
+    },
+    "coarse": {
+      "n": 5909,
+      "median": 0.14454947425362263,
+      "p95": 0.7237032118574689,
+      "max": 6.690997429661081,
+      "mean": -0.06954563927440142
+    }
+  }
+}

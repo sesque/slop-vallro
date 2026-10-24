@@ -120,6 +120,7 @@ class ThirdPersonControllerManager {
     this.scene = scene;
     this.colliders = colliders;
     this._colliderCells = null; // built on first use, see nearColliders()
+    this.world = null; // see setWorld()
     this.activeMode = 'car'; // 'person' | 'car' | 'cyclist' | 'helicopter'
 
     this.keys = {
@@ -249,6 +250,17 @@ class ThirdPersonControllerManager {
     for (const action of Object.keys(this.keys)) this.keys[action] = false;
   }
 
+  // Swaps Manhattan for another world: { groundHeight(x, z, mode), bounds: { minX, maxX, minZ, maxZ } }. The bounds are a
+  // hard edge for every mode (no island shore, no harbour for the helicopter).
+  setWorld(world) {
+    this.world = world;
+  }
+
+  clampToWorld(x, z) {
+    const b = this.world.bounds;
+    return { x: Math.max(b.minX, Math.min(b.maxX, x)), z: Math.max(b.minZ, Math.min(b.maxZ, z)) };
+  }
+
   setMode(mode) {
     if (!this.entities[mode]) return;
     this.activeMode = mode;
@@ -320,6 +332,7 @@ class ThirdPersonControllerManager {
     const cameraBack = Math.cos(0.09) * entity.chaseDistance;
     const cameraUp = entity.chaseHeight + Math.sin(0.09) * entity.chaseDistance * 0.85;
     const clampPoint = (px, pz) => {
+      if (this.world) return this.clampToWorld(px, pz);
       pz = Math.max(ISLAND_BOUNDS.minZ + (heli ? -6000 : 30), Math.min(ISLAND_BOUNDS.maxZ + margin, pz));
       px = Math.max(ISLAND_BOUNDS.minX - margin, Math.min(ISLAND_BOUNDS.maxX + margin, px));
       if (!heli && getIslandBoundsAtZ) {
@@ -360,8 +373,9 @@ class ThirdPersonControllerManager {
     const origin = clampPoint(x, z);
     if (clear(origin)) return origin;
     // Four-metre rings cover nearby streets and courtyards, with bounded work even for a click inside a large block.
-    const cx = origin ? origin.x : Math.max(ISLAND_BOUNDS.minX, Math.min(ISLAND_BOUNDS.maxX, x));
-    const cz = origin ? origin.z : Math.max(ISLAND_BOUNDS.minZ + 30, Math.min(ISLAND_BOUNDS.maxZ, z));
+    const fallback = this.world ? this.clampToWorld(x, z) : null;
+    const cx = origin ? origin.x : fallback ? fallback.x : Math.max(ISLAND_BOUNDS.minX, Math.min(ISLAND_BOUNDS.maxX, x));
+    const cz = origin ? origin.z : fallback ? fallback.z : Math.max(ISLAND_BOUNDS.minZ + 30, Math.min(ISLAND_BOUNDS.maxZ, z));
     for (let distance = 4; distance <= 256; distance += 4) {
       for (let i = 0; i < 32; i++) {
         const angle = i * Math.PI / 16;
@@ -778,6 +792,7 @@ class ThirdPersonControllerManager {
   }
 
   getGroundHeight(x, z, mode = 'person') {
+    if (this.world) return this.world.groundHeight(x, z, mode);
     // Inside Central Park (5th Ave to Central Park West, 59th St to 110th St)
     const cp = CENTRAL_PARK_BOUNDS;
     if (x > cp.minX && x < cp.maxX && z > cp.minZ && z < cp.maxZ) {
@@ -837,9 +852,15 @@ class ThirdPersonControllerManager {
     // The detailed island (the helicopter may roam out over the harbour & the boroughs)
     const heli = this.activeMode === 'helicopter';
     const m = heli ? 6000 : 0;
-    pos.x = Math.max(ISLAND_BOUNDS.minX - m, Math.min(ISLAND_BOUNDS.maxX + m, pos.x));
-    pos.z = Math.max(ISLAND_BOUNDS.minZ + (heli ? -6000 : 30), Math.min(ISLAND_BOUNDS.maxZ + m, pos.z));
-    if (this.activeMode !== 'helicopter' && getIslandBoundsAtZ) {
+    if (this.world) {
+      const edge = this.clampToWorld(pos.x, pos.z);
+      pos.x = edge.x;
+      pos.z = edge.z;
+    } else {
+      pos.x = Math.max(ISLAND_BOUNDS.minX - m, Math.min(ISLAND_BOUNDS.maxX + m, pos.x));
+      pos.z = Math.max(ISLAND_BOUNDS.minZ + (heli ? -6000 : 30), Math.min(ISLAND_BOUNDS.maxZ + m, pos.z));
+    }
+    if (!this.world && this.activeMode !== 'helicopter' && getIslandBoundsAtZ) {
       const shore = getIslandBoundsAtZ(pos.z);
       const minShoreX = shore.westX + 8.0;
       const maxShoreX = shore.eastX - 8.0;

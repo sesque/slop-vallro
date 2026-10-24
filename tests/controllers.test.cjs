@@ -376,3 +376,25 @@ test('player clearance respects altitude and permits a ground arrival under an a
   helicopter.position.y = 1;
   assert.notDeepEqual({ ...controller.teleportActiveTo(0, 0) }, { x: 0, z: 0 }, 'a helicopter parked at street level must be avoided');
 });
+
+test('an installed world replaces Manhattan ground height and its bounds are a hard edge for every mode', () => {
+  const { controller } = keyboardHarness({ ISLAND_BOUNDS: { sidewalkHeight: 0.15 } });
+  controller.setWorld({
+    groundHeight: (x, z, mode) => 100 + x * 0.01 + (mode === 'person' ? 0.5 : 0),
+    bounds: { minX: -50, maxX: 60, minZ: -70, maxZ: 80 }
+  });
+  assert.equal(controller.getGroundHeight(100, 0, 'car'), 101);
+  assert.equal(controller.getGroundHeight(100, 0, 'person'), 101.5);
+  const far = controller.clampToWorld(-1e6, 1e6);
+  assert.deepEqual([far.x, far.z], [-50, 80]);
+  const inside = controller.clampToWorld(10, 20);
+  assert.deepEqual([inside.x, inside.z], [10, 20]);
+  for (const activeMode of ['person', 'car', 'cyclist', 'helicopter']) {
+    controller.activeMode = activeMode;
+    controller._colliderCells = null;
+    controller.colliders = [];
+    const pos = { x: 9000, y: 0, z: -9000 };
+    controller.resolveHorizontalCollision(pos, 0.5, 1.0);
+    assert.deepEqual([pos.x, pos.z], [60, -70], activeMode);
+  }
+});

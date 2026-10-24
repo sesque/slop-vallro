@@ -18,6 +18,10 @@ Read these before working:
 - Keep the upstream architecture: static builders (`build*(scene)` returning a handle) and per-frame systems
   (`update(dt, …)`) wired in `js/main.js`. Change the city-specific modules; keep the generic ones
   (see `spec.md` §6).
+- **Scope: the world is the whole municipality of Vallromanes** (INE 08296), not just the urban area covered by
+  the BUE 1:1000. The BUE is the high-detail core; the rest (forest, farmland, Serralada de Marina slopes) comes
+  from the ICGC DTM, RTT and OSM at lower detail. The municipal boundary polygon defines the playable extent and is a **hard edge** (player, vehicles and
+  traffic cannot cross it; the terrain just beyond it is only a visual skirt).
 - Raw source data lives in `tools/data/vallromanes/raw/` and is **not committed** (licence and size). Generated
   runtime data lives in `data/` and **is** committed.
 - The world frame is metres in a local frame derived from EPSG:25831 (ETRS89 / UTM 31N). Never mix in
@@ -36,5 +40,5 @@ Read these before working:
 npm run inventory   # report on raw BUE shapefiles
 npm run geodata     # run the full tools pipeline → data/
 npm test            # node tests (tests/*.test.*)
-npx serve .         # open http://localhost:3000 in a WebGPU browser
+npx serve .         # open http://localhost:3000 in a WebGPU browser; add ?terrain for the Vallromanes terrain demo
 ```
