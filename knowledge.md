@@ -188,6 +188,11 @@ index contour labels 331.
 - **Pools and ponds:** outlines come in pieces (about 1.3 per ring). Joining ends within 0.3 m gives 465 pools (all with an inner margin) and 58 ponds; a wider tolerance joins unrelated pieces. Pools sit about 0.14 m above the ground (flat Z), ponds can be 1 m below it.
 - **Props:** `ANGLE` is 0 for trees, lamps, poles and manholes (no orientation information) but real for gullies, tree pits and fountains. Lamps point their bracket at the nearest street. Trees carry no species or height, so the three upstream species are used at random (plane, locust, elm), scaled 0.5 to 0.9.
 
+### 3.9 What the drivable street graph looks like (measured)
+- 358 drivable edges (urban, urbanUnpaved, road) = 38.3 km, which is 70 km of lanes. Node degree: 109 dead ends, 46 pass-through, 161 three-way, 8 four-way. 19 components, the largest 87.7 % of the length. 62 one-way edges, 358 edges have 2 lanes or fewer.
+- Posted speed: 30 km/h on 274 edges, 20 on 38, 50 on 33, 40 on 4, 70 on 6, 90 on 3. Edge length P10 15 m, median 80 m, P90 241 m: junctions often sit within 30 m of each other, which is why traffic treats them as clusters (a car between two of them cannot hold one and wait for the other).
+- Data convention to remember: `halfL`/`swL` is the side with positive lateral, (-dz, dx) of the direction a to b, which in the z-south map is the **right-hand** side when travelling a to b. Lanes and pavements use it that way.
+
 ## 4. Decisions so far
 - Primary geometry comes from **BUE 1:1000 SHP**. Building floor counts come from **Catastro**. Terrain comes
   from **ICGC 0.5 m DTM** (BUE contours and spot heights used for validation and fill). Road attributes come

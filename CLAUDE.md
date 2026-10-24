@@ -28,7 +28,9 @@ Read these before working:
   lat/lon at runtime.
 - Municipality codes: **INE 08296** (Diputació files, street guide), **Cadastre 08297** (Catastro INSPIRE
   feeds). Don't confuse them.
-- Pin three.js to an exact release in the import map. Upstream uses `@dev`, which breaks unpredictably.
+- Pin three.js to an exact version in the import map. Upstream uses `@dev`, which breaks unpredictably, so it is pinned to the
+  dev commit `fae8734` (r187dev). The 0.186.1 release does not render in Safari (shader private address space over 8192 bytes);
+  that commit does, at 60 fps. Before moving the pin, check Safari as well as Chrome.
 - Every pipeline stage prints an inventory or validation report and fails loudly on NaN, empty output or an
   out-of-bounds bbox.
 - Credit the data sources in `README.md` (ICGC CC BY 4.0, Catastro CC BY 4.0, OSM ODbL, Diputació de

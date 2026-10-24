@@ -13,12 +13,15 @@ import { loadBoundary, loadBuildings, loadFeatures, loadLabels, loadProps, loadR
 import { confineToRing, pointInRings } from './geo/polygon.js';
 import { createRoadIndex } from './geo/road-index.js';
 import { createStairIndex } from './geo/stair-index.js';
+import { buildLaneGraph } from './geo/lane-graph.js';
+import { buildPavementGraph } from './geo/pavement-graph.js';
 import { buildTerrain } from './world/terrain.js';
 import { buildBuildings } from './world/buildings.js';
 import { buildStreets } from './world/streets.js';
 import { buildFeatures } from './world/features.js';
 import { buildProps } from './world/props.js';
 import { CURB, LIFT, ROAD_DEPTH, TRACK_LIFT } from './world/street-geometry.js';
+import { createTraffic } from './traffic.js';
 
 // js/town.js
 // Slop Vallromanes: the real terrain, buildings, streets, walls, stairs, water and trees of the municipality, with the
@@ -44,6 +47,9 @@ const CATEGORY_ORDER = ['village', 'leisure', 'stay', 'masia', 'hill'];
 const CAMERA_KEYS = ['5', '6', '7', '8', '9', '0'];
 
 export async function initTown() {
+  // Switches for tracking down a rendering problem on one browser: ?notraffic, ?notrees, ?lite (a smaller clustered-lighting grid)
+  const flags = new URLSearchParams(location.search);
+  const noTraffic = flags.has('notraffic');
   const container = document.getElementById('canvas-container');
   const loadingOverlay = document.getElementById('loading-overlay');
   const loadingStatus = document.getElementById('loading-status');
@@ -54,7 +60,7 @@ export async function initTown() {
   renderer.setPixelRatio(1.0);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
-  renderer.lighting = new ClusteredLighting(256, 32, 28, 48);
+  renderer.lighting = flags.has('lite') ? new ClusteredLighting(64, 64, 12, 16) : new ClusteredLighting(256, 32, 28, 48);
   container.appendChild(renderer.domElement);
   await renderer.init();
   // WebGPU validation errors are only logged; keep them where checks can read them (window.vallromanes.gpuErrors)
@@ -90,13 +96,21 @@ export async function initTown() {
     if (hit.edge.cls === 'track' || hit.edge.cls === 'urbanUnpaved') return base + ROAD_DEPTH + TRACK_LIFT;
     return base + ROAD_DEPTH + LIFT + (hit.kind === 'sidewalk' && mode === 'person' ? CURB : 0);
   };
-  const props = buildProps(scene, propData, { ground: sampler.heightAt, surface: (x, z) => groundHeight(x, z, 'car'), roadIndex });
+  const props = buildProps(scene, propData, { trees: !flags.has('notrees'), ground: sampler.heightAt, surface: (x, z) => groundHeight(x, z, 'car'), roadIndex });
   const world = {
     groundHeight,
     normalAt: sampler.normalAt,
     bounds: { minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ },
     confine: (x, z) => confineToRing(boundary.rings[0], x, z, EDGE_MARGIN)
   };
+
+  // Cars on the lanes and people on the pavements of the baked streets; they stay inside the municipal boundary
+  const laneGraph = buildLaneGraph(roads, { trims: streets.trims });
+  const pavements = buildPavementGraph(roads, streets.trims);
+  const inMunicipality = (x, z) => pointInRings(x, z, boundary.rings);
+  // ?notraffic leaves the town empty, to tell a traffic problem from a rendering one
+  const traffic = createTraffic(scene, { laneGraph, pavements, groundHeight, inside: inMunicipality, cars: noTraffic ? 0 : 60, people: noTraffic ? 0 : 80 });
+  if (noTraffic) traffic.group.visible = false;
 
   const controllerManager = new ThirdPersonControllerManager(scene, [...buildings.colliders, ...features.colliders, ...props.colliders]);
   controllerManager.setWorld(world);
@@ -410,7 +424,7 @@ export async function initTown() {
 
   // Handles for the console and for checks of the running page
   window.vallromanes = {
-    gpuErrors, THREE, scene, renderer, terrain, buildings, streets, features, props, stairIndex, roadIndex, roads, boundary, sampler,
+    gpuErrors, THREE, scene, renderer, traffic, laneGraph, pavements, terrain, buildings, streets, features, props, stairIndex, roadIndex, roads, boundary, sampler,
     labels, mapSystem, controllerManager, cameraSystem, lightingSystem, selectMode, selectCamera, selectTime, teleportTo
   };
 
@@ -445,6 +459,11 @@ export async function initTown() {
     gamepadControls.update(dt);
     controllerManager.update(dt, elapsed);
     cameraSystem.update(dt, elapsed);
+    {
+      const ent = controllerManager.getActiveEntity();
+      const focus = cameraSystem.getActivePreset().category === 'follow' ? ent.position : cameraSystem.currentPos;
+      traffic.update(dt, elapsed, cameraSystem.camera, focus, ent, controllerManager.activeMode);
+    }
     terrain.update(cameraSystem.camera.position);
     props.update(cameraSystem.camera);
     lightingSystem.update(cameraSystem.currentPos);

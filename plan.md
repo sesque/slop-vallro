@@ -118,11 +118,23 @@ facade detail yet); about 2.5 M triangles in a typical view at 90 to 120 fps in 
       README rewritten with the data credits.
 
 ## Phase 7 — Traffic and pedestrians (spec §6)
-- [ ] `road-graph.js`: a lane graph from `roads.json`; yield and priority at intersections; roundabouts if any.
-- [ ] Port `traffic.js` to the graph: spawning around the camera, low density, speed by curvature and slope.
-      Buses only if there is a real route.
-- [ ] A pavement graph for pedestrians; crossings at intersections.
-- [ ] Tests: routing, no deadlocks over a long simulated run.
+- [x] `js/geo/lane-graph.js`: one right-hand lane per direction from `roads.json` (652 lanes, 70 km, one-way from OSM), connected at
+      the street nodes with a turn weight by angle and street rank. Junctions closer than 40 m, and bends within 30 m of one,
+      share one gate. No roundabouts exist in the data.
+- [x] `js/traffic-sim.js` (no rendering, runs under Node): Intelligent Driver Model, speed from bends (v = sqrt(aLat / curvature)),
+      the next turn and the grade, pure-pursuit steering on a bicycle model, one car at a time through a gate (higher-ranked streets
+      first; waiting cars get their turn; a gate needs room in the lane beyond it), cars stop for walkers on a crossing and for the
+      player. Cars live in a pool around the camera: one car per 110 m of lane within the ring, spawned out of sight. No buses: the
+      data has no route.
+- [x] `js/geo/pavement-graph.js` + `js/walkers-sim.js`: pavement links per street side, corners round each node, crossings at
+      junctions; walkers cross only when no car holds or is about to enter the gate.
+- [x] `js/traffic.js`: instanced sedans and SUVs (near and far LOD, spinning wheels, brake and turn lamps, contact shadows,
+      32 night headlight spots) and `PersonCrowd` rigs, wired into `js/town.js`.
+- [x] Tests (`tests/traffic.test.mjs`): lanes and routing, the gate, the crossing, pavement links, and on the real streets no car
+      holding a gate during a crossing and no deadlock over 30 min at three places (at most 3 cars removed after 90 s stuck).
+- [ ] Known limits: the player passes through traffic cars (they brake for the player but there is no collision); walkers do not
+      avoid each other or the player; waits of 60+ s at a busy junction still happen in jams. Frame rate with traffic has not been
+      measured in a focused browser (the preview pane ran at about 6 fps, also with traffic hidden).
 
 **Milestone E:** a living town.
 

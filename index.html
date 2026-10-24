@@ -7,14 +7,14 @@
   <link rel="icon" href="data:," />
   <meta name="description" content="A 1:1 3D simulation of Vallromanes (Vallès Oriental, Catalonia) built from official survey data: the real terrain, 2,900 buildings, streets, stairs, walls and trees, with walking, driving, cycling and flying, in three.js WebGPURenderer and TSL shaders." />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-  <!-- three.js pinned release (npm package served by jsDelivr) -->
+  <!-- three.js 187dev pinned to a dev commit (jsDelivr): the 0.186.1 release fails in Safari (private address space limit), this commit works -->
   <script type="importmap">
     {
       "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.webgpu.js",
-        "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.webgpu.js",
-        "three/tsl": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.tsl.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+        "three": "https://cdn.jsdelivr.net/gh/mrdoob/three.js@fae873455dff9602a916b4d2e8a985921448b62a/build/three.webgpu.js",
+        "three/webgpu": "https://cdn.jsdelivr.net/gh/mrdoob/three.js@fae873455dff9602a916b4d2e8a985921448b62a/build/three.webgpu.js",
+        "three/tsl": "https://cdn.jsdelivr.net/gh/mrdoob/three.js@fae873455dff9602a916b4d2e8a985921448b62a/build/three.tsl.js",
+        "three/addons/": "https://cdn.jsdelivr.net/gh/mrdoob/three.js@fae873455dff9602a916b4d2e8a985921448b62a/examples/jsm/"
       }
     }
   </script>
@@ -30,11 +30,16 @@
   <link rel="modulepreload" href="./js/town-config.js" />
   <link rel="modulepreload" href="./js/town-map.js" />
   <link rel="modulepreload" href="./js/town.js" />
+  <link rel="modulepreload" href="./js/traffic-sim.js" />
+  <link rel="modulepreload" href="./js/traffic.js" />
   <link rel="modulepreload" href="./js/trees.js" />
   <link rel="modulepreload" href="./js/tsl-materials.js" />
   <link rel="modulepreload" href="./js/vehicle-lights.js" />
+  <link rel="modulepreload" href="./js/walkers-sim.js" />
+  <link rel="modulepreload" href="./js/geo/lane-graph.js" />
   <link rel="modulepreload" href="./js/geo/load-geodata.js" />
   <link rel="modulepreload" href="./js/geo/map-math.js" />
+  <link rel="modulepreload" href="./js/geo/pavement-graph.js" />
   <link rel="modulepreload" href="./js/geo/polygon.js" />
   <link rel="modulepreload" href="./js/geo/road-index.js" />
   <link rel="modulepreload" href="./js/geo/stair-index.js" />

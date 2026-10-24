@@ -128,7 +128,7 @@ function instanced(geometry, material, matrices, name) {
  * `props` = { tree, lamp, pole, pillar, manhole, gully, treePit, fountain } as Float32Array [x, z, heading, ...];
  * `ground(x, z)` the terrain, `surface(x, z)` the height a vehicle stands at (on a road, the asphalt).
  */
-export function buildProps(scene, props, { ground, surface = ground, roadIndex = null } = {}) {
+export function buildProps(scene, props, { ground, surface = ground, roadIndex = null, trees = true } = {}) {
   const group = new THREE.Group();
   group.name = 'VallromanesProps';
   const dummy = new THREE.Object3D();
@@ -190,7 +190,7 @@ export function buildProps(scene, props, { ground, surface = ground, roadIndex =
   for (const mesh of meshes) mesh.castShadow = mesh !== lens && mesh.name !== 'manholes' && mesh.name !== 'gullies' && mesh.name !== 'tree pits';
 
   // Trees: the upstream instanced field with its own levels of detail; a trunk collider each
-  const sites = treeSites(props.tree, ground);
+  const sites = trees ? treeSites(props.tree, ground) : [];
   const field = createTreeField(scene, sites, TREE_LOD);
   group.add(field.group);
   for (const s of sites) colliders.push(createCircleCollider(s.x, s.z, 0.28, s.y + 6));
