@@ -9,17 +9,18 @@ import { GamepadControls } from './gamepad-controls.js';
 import { CameraSystem, CAMERA_PRESETS } from './cameras.js';
 import { LightingSystem } from './lighting.js';
 import { TownMapSystem } from './town-map.js';
-import { loadBoundary, loadBuildings, loadFeatures, loadLabels, loadProps, loadRoads, loadStairs, loadTerrain } from './geo/load-geodata.js';
+import { loadBoundary, loadBuildings, loadCanopy, loadFeatures, loadLabels, loadProps, loadRoads, loadStairs, loadTerrain } from './geo/load-geodata.js';
 import { confineToRing, pointInRings } from './geo/polygon.js';
 import { createRoadIndex } from './geo/road-index.js';
 import { createStairIndex } from './geo/stair-index.js';
 import { buildLaneGraph } from './geo/lane-graph.js';
 import { buildPavementGraph } from './geo/pavement-graph.js';
-import { buildTerrain } from './world/terrain.js';
+import { buildTerrain, canopyTexture, createTerrainMaterial } from './world/terrain.js';
 import { buildBuildings } from './world/buildings.js';
 import { buildStreets } from './world/streets.js';
 import { buildFeatures } from './world/features.js';
 import { buildProps } from './world/props.js';
+import { buildWoodland } from './world/woodland.js';
 import { CURB, LIFT, ROAD_DEPTH, TRACK_LIFT } from './world/street-geometry.js';
 import { createTraffic } from './traffic.js';
 
@@ -71,12 +72,12 @@ export async function initTown() {
   const lightingSystem = new LightingSystem(scene, renderer);
 
   setStatus('Loading the terrain, buildings and streets of Vallromanes...');
-  const [{ sampler, frame }, boundary, { structures }, roads, featureData, stairData, { props: propData }, labels] = await Promise.all([
+  const [{ sampler, frame }, boundary, { structures }, roads, featureData, stairData, { props: propData }, labels, canopy] = await Promise.all([
     loadTerrain('./data/'), loadBoundary('./data/'), loadBuildings('./data/'), loadRoads('./data/'), loadFeatures('./data/'),
-    loadStairs('./data/'), loadProps('./data/'), loadLabels('./data/')
+    loadStairs('./data/'), loadProps('./data/'), loadLabels('./data/'), loadCanopy('./data/')
   ]);
   setStatus('Building the town...');
-  const terrain = buildTerrain(scene, sampler);
+  const terrain = buildTerrain(scene, sampler, { material: createTerrainMaterial({ canopy: canopyTexture(canopy) }) });
   const buildings = buildBuildings(scene, structures);
   const streets = buildStreets(scene, roads);
   const roadIndex = createRoadIndex(roads, streets.trims);
@@ -96,6 +97,7 @@ export async function initTown() {
     if (hit.edge.cls === 'track' || hit.edge.cls === 'urbanUnpaved') return base + ROAD_DEPTH + TRACK_LIFT;
     return base + ROAD_DEPTH + LIFT + (hit.kind === 'sidewalk' && mode === 'person' ? CURB : 0);
   };
+  const inMunicipality = (x, z) => pointInRings(x, z, boundary.rings);
   const props = buildProps(scene, propData, { trees: !flags.has('notrees'), ground: sampler.heightAt, surface: (x, z) => groundHeight(x, z, 'car'), roadIndex });
   const world = {
     groundHeight,
@@ -104,10 +106,15 @@ export async function initTown() {
     confine: (x, z) => confineToRing(boundary.rings[0], x, z, EDGE_MARGIN)
   };
 
+  // The woods: instanced trees where the canopy grid is tall, not on streets and not where the survey has its own trees
+  const woodland = flags.has('nowoods') ? null : buildWoodland(scene, canopy, {
+    ground: sampler.heightAt, surveyed: propData.tree.filter((_, i) => i % 3 !== 2),
+    allow: (x, z) => inMunicipality(x, z) && !roadIndex.query(x, z, 3)
+  });
+
   // Cars on the lanes and people on the pavements of the baked streets; they stay inside the municipal boundary
   const laneGraph = buildLaneGraph(roads, { trims: streets.trims });
   const pavements = buildPavementGraph(roads, streets.trims);
-  const inMunicipality = (x, z) => pointInRings(x, z, boundary.rings);
   // ?notraffic leaves the town empty, to tell a traffic problem from a rendering one
   const traffic = createTraffic(scene, { laneGraph, pavements, groundHeight, inside: inMunicipality, cars: noTraffic ? 0 : 60, people: noTraffic ? 0 : 80 });
   if (noTraffic) traffic.group.visible = false;
@@ -424,7 +431,7 @@ export async function initTown() {
 
   // Handles for the console and for checks of the running page
   window.vallromanes = {
-    gpuErrors, THREE, scene, renderer, traffic, laneGraph, pavements, terrain, buildings, streets, features, props, stairIndex, roadIndex, roads, boundary, sampler,
+    gpuErrors, THREE, scene, renderer, woodland, traffic, laneGraph, pavements, terrain, buildings, streets, features, props, stairIndex, roadIndex, roads, boundary, sampler,
     labels, mapSystem, controllerManager, cameraSystem, lightingSystem, selectMode, selectCamera, selectTime, teleportTo
   };
 

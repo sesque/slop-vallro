@@ -1,8 +1,8 @@
 // Runs every bake stage in order (boundary, roads, stairs, terrain with roads and stairs burned in, buildings,
-// features, props, labels) and writes data/manifest.json (spec §5.8): frame, counts, file sizes and hashes.
+// features, props, canopy, labels) and writes data/manifest.json (spec §5.8): frame, counts, file sizes and hashes.
 //   npm run geodata
 // Stages needing raw downloads (tools/data/vallromanes/raw) fail loudly if a source is missing. The DTM/DSM windows
-// are fetched separately with fetch-icgc-dtm.mjs (network) and are not part of this run.
+// are fetched separately with fetch-icgc-dtm.mjs (network) and are not part of this run; build-canopy.mjs needs both of them.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { CRS, E0, H0, N0 } from './frame.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const stages = ['build-boundary.mjs', 'build-roads.mjs', 'build-stairs.mjs', 'build-terrain.mjs', 'build-buildings.mjs', 'build-features.mjs', 'build-props.mjs', 'build-labels.mjs'];
+const stages = ['build-boundary.mjs', 'build-roads.mjs', 'build-stairs.mjs', 'build-terrain.mjs', 'build-buildings.mjs', 'build-features.mjs', 'build-props.mjs', 'build-canopy.mjs', 'build-labels.mjs'];
 
 for (const stage of stages) {
   console.log(`\n=== ${stage} ===`);
@@ -22,7 +22,7 @@ for (const stage of stages) {
   }
 }
 
-const files = ['boundary.json', 'roads.json', 'stairs.json', 'terrain.json', 'terrain.bin', 'buildings.json', 'buildings.bin', 'features.json', 'features.bin', 'props.json', 'props.bin', 'labels.json'];
+const files = ['boundary.json', 'roads.json', 'stairs.json', 'terrain.json', 'terrain.bin', 'buildings.json', 'buildings.bin', 'features.json', 'features.bin', 'props.json', 'props.bin', 'canopy.json', 'canopy.bin', 'labels.json'];
 const manifestFiles = {};
 for (const f of files) {
   const buf = fs.readFileSync(path.join(root, 'data', f));

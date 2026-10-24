@@ -25,6 +25,17 @@ export async function loadBoundary(baseUrl = './data/', fetchImpl = globalThis.f
   return { meta, rings: meta.rings.map((r) => Float32Array.from(r)) };
 }
 
+// The vegetation height grid: { meta (cell, step, width, height, originX, originZ), data: Uint8Array (row 0 = north, heights in steps of meta.step m) }
+export async function loadCanopy(baseUrl = './data/', fetchImpl = globalThis.fetch) {
+  const [metaRes, binRes] = await Promise.all([fetchImpl(`${baseUrl}canopy.json`), fetchImpl(`${baseUrl}canopy.bin`)]);
+  if (!metaRes.ok) throw new Error(`canopy.json: HTTP ${metaRes.status}`);
+  if (!binRes.ok) throw new Error(`canopy.bin: HTTP ${binRes.status}`);
+  const meta = await metaRes.json();
+  const data = new Uint8Array(await binRes.arrayBuffer());
+  if (data.length !== meta.width * meta.height) throw new Error(`canopy.bin has ${data.length} cells, expected ${meta.width * meta.height}`);
+  return { meta, data };
+}
+
 // Structures with their rings as flat Float32Array [x, z, ...] in metres: rings[0] outer (positive area), the rest holes
 export async function loadBuildings(baseUrl = './data/', fetchImpl = globalThis.fetch) {
   const [metaRes, binRes] = await Promise.all([fetchImpl(`${baseUrl}buildings.json`), fetchImpl(`${baseUrl}buildings.bin`)]);

@@ -139,6 +139,14 @@ facade detail yet); about 2.5 M triangles in a typical view at 90 to 120 fps in 
 **Milestone E:** a living town.
 
 ## Phase 8 — Enrichment
+- [x] Canopy from the ICGC LiDAR (DSM minus DTM, both 1 m windows already on disk, no new download): `build-canopy.mjs` ->
+      `data/canopy.json` + `canopy.bin` (4 m cells, 0.5 m steps, buildings removed, 0.67 MB gzipped). Measured share of the
+      municipality by vegetation height: 10.6 % under 0.5 m, 9.7 % 0.5-2 m, 12.8 % 2-5 m, 27.8 % 5-10 m, 36.9 % 10-20 m, 2.3 % above
+      20 m, so about two thirds is woodland. The ground shader tints it as forest floor (`createTerrainMaterial({ canopy })`).
+- [x] Instanced woodland (`js/world/woodland.js`): 131 993 trees from the canopy grid (one per about 55 m2 where the vegetation is above
+      4.5 m, not on streets, not in a cell with a surveyed tree), through the upstream tree field with `maxDist` 520 m, so about 10 000
+      are drawn at a time. 120 fps flying over it and 71 fps standing in the thick of it (1007 x 1077 px preview). Limits: the three
+      upstream species (plane, locust, elm) stand for pines and oaks, and woodland trees have no colliders. `?nowoods` leaves them out.
 - [ ] `fetch-catastro.sh` (ATOM 08 → 08297 ZIP); join BuildingParts → floors, use, year; reconcile with heights.
 - [ ] Roofs from `CON_29` ridges and slope arrows; optionally fit to LiDAR.
 - [ ] Facade and material styles by POUM zone (hand-digitised `overrides/zoning.geojson`, or the official

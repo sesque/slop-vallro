@@ -13,7 +13,8 @@ import {
   sin,
   dot,
   positionWorld,
-  normalWorldGeometry
+  normalWorldGeometry,
+  texture
 } from 'three/tsl';
 
 // js/world/terrain.js
@@ -33,9 +34,20 @@ const LOD_HYSTERESIS = 1.12;
 /**
  * Wet Mediterranean-hillside ground: dry grass and olive scrub on the gentle slopes, red-brown soil patches, grey
  * limestone where it gets steep. Everything derives from the world position and the geometric normal, so chunks and
- * levels of detail all shade alike and no texture or UV is needed.
+ * levels of detail all shade alike and no UV is needed. With a `canopy` grid (see canopyTexture) the ground under woodland is
+ * the dark forest floor, and bushes and crops tint it green.
  */
-export function createTerrainMaterial() {
+/** The canopy grid as a texture (R8, linear) plus the numbers the ground shader needs; `loaded` = loadCanopy()'s result. */
+export function canopyTexture({ meta, data }) {
+  const tex = new THREE.DataTexture(data, meta.width, meta.height, THREE.RedFormat, THREE.UnsignedByteType);
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearFilter;
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.needsUpdate = true;
+  return { texture: tex, originX: meta.originX, originZ: meta.originZ, width: meta.width, height: meta.height, cell: meta.cell, step: meta.step };
+}
+
+export function createTerrainMaterial({ canopy = null } = {}) {
   const hash = Fn(([p]) => fract(sin(dot(p, vec2(127.1, 311.7))).mul(43758.5453)));
   // Smooth value noise on a 2D lattice
   const vnoise = Fn(([p]) => {
@@ -66,6 +78,14 @@ export function createTerrainMaterial() {
     let base = mix(grass, dryGrass, smoothstep(0.35, 0.75, field));
     base = mix(base, soil, smoothstep(0.62, 0.78, broad).mul(smoothstep(0.1, 0.3, slope)));
     base = mix(base, rock, smoothstep(0.1, 0.3, slope));
+    if (canopy) {
+      // vegetation height in metres at this spot, from the 4 m grid (linear filtering softens the cell edges)
+      const uvC = vec2(positionWorld.x.sub(canopy.originX), positionWorld.z.sub(canopy.originZ)).div(vec2(canopy.width * canopy.cell, canopy.height * canopy.cell));
+      const h = texture(canopy.texture, uvC).r.mul(255.0 * canopy.step);
+      const floorColor = mix(color(0x3b4a27), color(0x2c3a1f), field);
+      base = mix(base, color(0x7b8a42), smoothstep(0.4, 1.6, h).mul(smoothstep(4.0, 2.0, h)).mul(0.45)); // crops and scrub
+      base = mix(base, floorColor, smoothstep(2.5, 6.0, h).mul(smoothstep(0.55, 0.3, slope)));
+    }
     // Higher ground is drier and greyer
     base = mix(base, base.mul(vec3(1.06, 1.0, 0.92)), smoothstep(150.0, 330.0, positionWorld.y.add(70.0)));
     return base.mul(float(0.84).add(grain.mul(0.32)));
