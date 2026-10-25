@@ -1,6 +1,6 @@
 # Slop Vallromanes
 
-Vallromanes (Vallès Oriental, Barcelona, Catalonia) in 3D, built from official survey data and rendered in the browser with [three.js](https://threejs.org/), WebGPURenderer and TSL. Explore the municipality on foot, by car, by bicycle or by helicopter: its real terrain, about 2,900 buildings and 4,300 structures with their real heights, floors and roofs, 38 km of streets with their names, stairs, walls, hedges, pools, street lamps and some 130,000 trees in its woods, with cars and people going about, a map, a list of places to teleport to, and the sun of 41.5° N. The town hall, the church of Sant Vicenç, the two schools and Can Poal have their own look.
+Vallromanes (Vallès Oriental, Barcelona, Catalonia) in 3D, built from official survey data and rendered in the browser with [three.js](https://threejs.org/), WebGPURenderer and TSL. Explore the municipality on foot, by car, by bicycle or by helicopter: its real terrain, about 2,900 buildings and 4,300 structures with their real heights, floors and roofs, 38 km of streets with their names, stairs, walls, hedges, pools, street lamps and some 130,000 trees in its woods, with cars and people going about, synthesised sound, a map, a list of places to teleport to, and the sun of 41.5° N. The town hall, the church of Sant Vicenç, the two schools and Can Poal have their own look.
 
 It is a fork of [mrdoob/slop-newyork](https://github.com/mrdoob/slop-newyork): the rendering, lighting, camera, controllers and post-processing come from there, and the town is baked offline from open data instead of generated.
 
@@ -14,7 +14,7 @@ npx serve .      # then open http://localhost:3000
 
 Add `?notraffic`, `?nowoods` or `?notrees` to the address to leave out the cars and people, the woods or the surveyed trees.
 
-Controls: `W A S D` move, `Shift` boosts, `Space` jumps or climbs, `1`–`4` switch between walking, driving, cycling and flying, `V` or `5`–`0` change camera, `M` opens the map, `H` hides the HUD. The map teleports where you click.
+Controls: `W A S D` move, `Shift` boosts, `Space` jumps or climbs, `1`–`4` switch between walking, driving, cycling and flying, `V` or `5`–`0` change camera, `M` opens the map, `H` hides the HUD, `N` mutes the sound. The map teleports where you click.
 
 ## Rebuild the data
 

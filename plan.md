@@ -215,3 +215,9 @@ facade detail yet); about 2.5 M triangles in a typical view at 90 to 120 fps in 
       slow the vehicle and fire the collision event. Checked in the browser: a person is pushed to trunk radius plus body radius, a car collider
       to 0.95 m plus body radius. Not done: traffic cars do not react to being hit (they brake for the player, but are not pushed), and walkers
       still do not avoid the player.
+- [x] Sound (`js/audio.js`, using the kept `audio-synthesis.js`, `audio-events.js` and `audio-acoustics.js`): the player's engine (car, bicycle,
+      helicopter) or footsteps, wind with speed, height and shelter from buildings, the engines of the nearest four traffic cars (distance, stereo,
+      doppler and buildings in the way) and a crash on impact. It starts on the first click or key press (browser rule), the sound button and `N`
+      mute it, and the choice is remembered. Building the sounds takes about 0.2 s on that first click. It runs without errors in Chrome (context
+      running, voices created and removed with the mode); **it has not been listened to**, so levels and the engine character need an ear.
+      Not done: birdsong or cicadas, church bells, traffic horns, voices of walkers (the synthesis for horns and speech exists in `audio-events.js`).

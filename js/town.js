@@ -23,6 +23,7 @@ import { buildProps } from './world/props.js';
 import { buildWoodland } from './world/woodland.js';
 import { CURB, LIFT, ROAD_DEPTH, TRACK_LIFT } from './world/street-geometry.js';
 import { createTraffic } from './traffic.js';
+import { TownAudio } from './audio.js';
 
 // js/town.js
 // Slop Vallromanes: the real terrain, buildings, streets, walls, stairs, water and trees of the municipality, with the
@@ -175,9 +176,9 @@ export async function initTown() {
   const elLocation = document.getElementById('hud-location');
   const elControlsHint = document.getElementById('hud-controls-hint');
   const modeSwitch = document.getElementById('mode-switch');
-  // There is no audio yet (phase 7 and later): its button stays hidden
   const soundButton = document.getElementById('btn-sound');
-  if (soundButton) soundButton.style.display = 'none';
+  // synthesised sound: the player's engine or footsteps, wind, the nearest traffic, crashes; starts on the first click or key press
+  const audio = new TownAudio({ controllerManager, traffic, button: soundButton, night: () => lightingSystem.uNightFactor.value });
 
   function renderControlHints(mode) {
     if (!elControlsHint) return;
@@ -415,6 +416,7 @@ export async function initTown() {
       case 'KeyV': cycleCamera(e.shiftKey ? -1 : 1); break;
       case 'KeyH': hudToggleBtn?.click(); break;
       case 'KeyM': if (!e.repeat) mapSystem.toggleFullMap(!mapSystem.isFullMapOpen); break;
+      case 'KeyN': if (!e.repeat) audio.toggle(); break;
     }
   });
   window.addEventListener('resize', () => {
@@ -457,7 +459,7 @@ export async function initTown() {
 
   // Handles for the console and for checks of the running page
   window.vallromanes = {
-    gpuErrors, THREE, scene, renderer, woodland, traffic, laneGraph, pavements, terrain, buildings, streets, features, props, stairIndex, roadIndex, roads, boundary, sampler,
+    gpuErrors, THREE, scene, renderer, audio, woodland, traffic, laneGraph, pavements, terrain, buildings, streets, features, props, stairIndex, roadIndex, roads, boundary, sampler,
     labels, mapSystem, controllerManager, cameraSystem, lightingSystem, selectMode, selectCamera, selectTime, teleportTo
   };
 
@@ -497,6 +499,7 @@ export async function initTown() {
       const ent = controllerManager.getActiveEntity();
       const focus = cameraSystem.getActivePreset().category === 'follow' ? ent.position : cameraSystem.currentPos;
       traffic.update(dt, elapsed, cameraSystem.camera, focus, ent, controllerManager.activeMode);
+      audio.update(dt, ent, controllerManager.activeMode, cameraSystem.camera);
     }
     terrain.update(cameraSystem.camera.position);
     props.update(cameraSystem.camera);
