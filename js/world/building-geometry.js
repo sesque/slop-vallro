@@ -99,6 +99,17 @@ function pushHipRoof(out, outer, eaveY, ridgeY, info) {
   }
 }
 
+/**
+ * The style of a building from its Catastro use and year of construction, 0..23: use * 4 + era, with use 0 unknown or
+ * residential, 1 agriculture, 2 industrial, 3 retail, 4 public service, 5 other; era 0 unknown, 1 before 1950, 2 1950-1989, 3 1990 on.
+ * It rides in the fraction of `info.w` (kind + style / 32) for the facade shader.
+ */
+export function styleOf(s) {
+  const use = s.use === 2 ? 1 : s.use === 3 ? 2 : s.use === 4 ? 3 : s.use === 5 ? 4 : s.use === 6 ? 5 : 0;
+  const era = !s.year ? 0 : s.year < 1950 ? 1 : s.year < 1990 ? 2 : 3;
+  return use * 4 + era;
+}
+
 export function seedOf(id) {
   return parseInt(id, 16) / 0xffffffff;
 }
@@ -111,7 +122,7 @@ export function seedOf(id) {
 export function appendStructure(out, s, { ruins = false } = {}) {
   const [outer, ...holes] = s.rings;
   const seed = seedOf(s.id);
-  const info = (surf, rows = 0) => [rows, surf, seed, s.kind];
+  const info = (surf, rows = 0) => [rows, surf, seed, s.kind + styleOf(s) / 32];
   const top = ruins ? Math.min(s.top, s.base + RUINS_HEIGHT) : s.top;
 
   if (s.open) {
@@ -126,7 +137,9 @@ export function appendStructure(out, s, { ruins = false } = {}) {
   const hip = s.roof === 1 && !ruins;
   const eaveY = hip ? top - s.rise * EAVE_FRACTION : top;
   // Window rows that fit under the eave, counted from the highest ground at the footprint
-  const rows = Math.max(0, Math.floor((eaveY - s.baseMax) / FLOOR_HEIGHT - 0.15));
+  let rows = Math.max(0, Math.floor((eaveY - s.baseMax) / FLOOR_HEIGHT - 0.15));
+  // Catastro's count of floors above ground is the truth where the building is joined to it, as far as the walls leave room
+  if (s.cat) rows = Math.max(1, Math.min(s.floors, Math.floor((eaveY - s.baseMax) / 2.3)));
   for (const ring of s.rings) pushWalls(out, ring, s.base - FOUNDATION, eaveY, s.baseMax, info(SURF.WALL, rows));
   if (hip) {
     pushHipRoof(out, outer, eaveY, top + s.rise * RIDGE_FRACTION, info(SURF.TILE));

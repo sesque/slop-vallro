@@ -147,7 +147,11 @@ facade detail yet); about 2.5 M triangles in a typical view at 90 to 120 fps in 
       4.5 m, not on streets, not in a cell with a surveyed tree), through the upstream tree field with `maxDist` 520 m, so about 10 000
       are drawn at a time. 120 fps flying over it and 71 fps standing in the thick of it (1007 x 1077 px preview). Limits: the three
       upstream species (plane, locust, elm) stand for pines and oaks, and woodland trees have no colliders. `?nowoods` leaves them out.
-- [ ] `fetch-catastro.sh` (ATOM 08 → 08297 ZIP); join BuildingParts → floors, use, year; reconcile with heights.
+- [x] Catastro (`tools/vallromanes/catastro.mjs`, raw files in `raw/catastro`, fetched by hand with `curl -k` because the server's certificate chain
+      is incomplete): parts are joined to the BUE footprints by centroid. 1 948 buildings and sheds joined, floors changed in 841 (the BUE
+      count overcounted by one in many two-floor houses); `use` and `year` baked for them. The facade shader reads them: older houses
+      (before 1950) warmer with narrower bays, 1990+ whiter, farm and industrial buildings plain grey with metal pitched roofs, shops and public
+      buildings light; window rows follow the real floors. 120 fps, no shader errors in Chrome; Safari not rechecked.
 - [x] Roofs and tops from the LiDAR surface model (`tools/vallromanes/lidar-roofs.mjs`, used by `build-buildings.mjs` when the 1 m DSM window is on
       disk; no new download): 413 BUE tops replaced by the LiDAR roof level (median +0.69 m, the buried ones included), 446 of the 1 566
       hip roofs made flat (eave-to-ridge relief under 0.9 m, so terraces), 790 hip rises set from the measured relief, 1 377 small

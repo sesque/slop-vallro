@@ -11,6 +11,7 @@ import { readBue } from './read-bue.mjs';
 import { loadTerrain } from '../../js/geo/load-geodata.js';
 import { fsFetch } from './fs-fetch.mjs';
 import { roofStats, loadDsm } from './lidar-roofs.mjs';
+import { loadCatastro } from './catastro.mjs';
 import { centroid, orientedBox, pointInRings, reverseRing, signedArea, simplifyRing } from '../../js/geo/polygon.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -132,12 +133,13 @@ export function refineWithLidar(d, roof, st, kindIndex, open, baseMean) {
   return out;
 }
 
-export function buildBuildings(features, ground, boundaryRings, lidar = null) {
+export function buildBuildings(features, ground, boundaryRings, lidar = null, catastro = null) {
   const records = [];
   const rings = [];
   let ringVerts = 0;
   const dropped = { degenerate: 0, outside: 0 };
   const lidarCount = { topReplaced: 0, flattened: 0, riseSet: 0, noPixels: 0 };
+  const catCount = { joined: 0, floorsChanged: 0 };
   const ids = new Set();
   const seen = { vertsBefore: 0, vertsAfter: 0 };
 
@@ -169,6 +171,14 @@ export function buildBuildings(features, ground, boundaryRings, lidar = null) {
       roof = { roof: r.roof, rise: r.rise };
     }
     const allRings = [outer, ...holes];
+    // Catastro: real floors above ground (BUE floors are the height over 3 m and overcount), use and year of construction
+    let cat = null;
+    if (catastro && kindIndex <= 1) cat = catastro.lookup(allRings);
+    if (cat && cat.floors >= 1) {
+      catCount.joined++;
+      if (cat.floors !== d.floors) catCount.floorsChanged++;
+      d = { ...d, floors: Math.min(10, cat.floors) };
+    } else cat = null;
     const cm = allRings.map((r) => r.map((v) => Math.round(v * 100)));
     let id = stableId(f.cas, cm.flat());
     while (ids.has(id)) id = stableId(id, [ids.size]); // vanishingly rare; keep ids unique
@@ -177,6 +187,7 @@ export function buildBuildings(features, ground, boundaryRings, lidar = null) {
       id, kind: kindIndex,
       base: +d.base.toFixed(2), baseMax: +d.baseMax.toFixed(2), top: +d.top.toFixed(2),
       floors: d.floors, roof: roof.roof, rise: roof.rise, flags: d.flags,
+      ...(cat ? { cat: 1, use: cat.use, ...(cat.year ? { year: cat.year } : {}) } : {}),
       rings: allRings.map((r, i) => [ringVerts + allRings.slice(0, i).reduce((s, q) => s + q.length / 2, 0), r.length / 2])
     });
     ringVerts += allRings.reduce((s, r) => s + r.length / 2, 0);
@@ -185,7 +196,7 @@ export function buildBuildings(features, ground, boundaryRings, lidar = null) {
   const bin = new Int32Array(ringVerts * 2);
   let o = 0;
   for (const r of rings) { bin.set(r, o); o += r.length; }
-  return { records, bin, dropped, seen, lidarCount };
+  return { records, bin, dropped, seen, lidarCount, catCount };
 }
 
 async function main() {
@@ -197,7 +208,10 @@ async function main() {
   const ground = (x, z) => sampler.heightAt(x, z);
   const lidar = loadDsm(path.join(RAW, 'icgc/dtm'));
   console.log(lidar ? 'LiDAR DSM found: roofs and tops are checked against it' : 'No LiDAR DSM (fetch-icgc-dtm.mjs --product dsm --level 0): BUE tops only');
-  const { records, bin, dropped, seen, lidarCount } = buildBuildings(features, ground, boundary.rings, lidar);
+  const catastro = loadCatastro(path.join(RAW, 'catastro'));
+  console.log(catastro ? `Catastro found: ${catastro.buildings} buildings, ${catastro.parts} parts` : 'No Catastro files (raw/catastro): BUE floors only');
+  const { records, bin, dropped, seen, lidarCount, catCount } = buildBuildings(features, ground, boundary.rings, lidar, catastro);
+  if (catastro) console.log(`Catastro: ${catCount.joined} structures joined, floors changed in ${catCount.floorsChanged}`);
   if (lidar) console.log(`LiDAR: ${lidarCount.topReplaced} tops replaced by the roof level, ${lidarCount.flattened} hip roofs made flat, ${lidarCount.riseSet} hip rises set from the relief, ${lidarCount.noPixels} buildings without enough pixels`);
   if (!records.length) throw new Error('No structures baked');
   for (const r of records) {

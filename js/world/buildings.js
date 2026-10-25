@@ -41,12 +41,17 @@ export function createBuildingMaterial() {
   const rows = info.x;
   const surf = info.y;
   const seed = info.z;
-  const kind = info.w;
+  const kind = floor(info.w);
+  // use and era of the building (building-geometry.js styleOf) ride in the fraction of info.w
+  const styleCode = floor(fract(info.w).mul(32.0).add(0.5));
+  const useCode = floor(styleCode.div(4.0));
+  const era = styleCode.sub(useCode.mul(4.0));
   const facadeUV = uv();
   const flag = (cond) => cond.select(float(1.0), float(0.0));
 
   // Window grid: one bay every ~3.4 m, one row per floor
-  const bayCoord = facadeUV.x.div(3.4).add(seed.mul(7.0));
+  // older houses have narrower bays
+  const bayCoord = facadeUV.x.div(float(3.4).sub(flag(era.equal(1.0)).mul(0.7))).add(seed.mul(7.0));
   const cu = fract(bayCoord);
   const cell = floor(bayCoord);
   const row = floor(facadeUV.y);
@@ -73,6 +78,13 @@ export function createBuildingMaterial() {
   const outbuilding = max(max(flag(kind.equal(1.0)), flag(kind.equal(5.0))), max(flag(kind.equal(4.0)), flag(kind.equal(6.0))));
   plaster = mix(plaster, color(0xb4afa4), outbuilding.mul(0.7));
   plaster = mix(plaster, color(0xa9c4c8), flag(kind.equal(7.0)).mul(0.8));
+  // Old houses (before 1950) are warmer and rougher, recent ones (1990 on) whiter; farm buildings and industry are plain concrete, shops and
+  // public buildings light
+  plaster = mix(plaster, color(0xcdb68e), flag(era.equal(1.0)).mul(0.4));
+  plaster = mix(plaster, color(0xf1ede5), flag(era.equal(3.0)).mul(0.3));
+  plaster = mix(plaster, color(0xb9b6ad), flag(useCode.equal(1.0)).mul(0.75));
+  plaster = mix(plaster, color(0xa4a9ad), flag(useCode.equal(2.0)).mul(0.8));
+  plaster = mix(plaster, color(0xf1ebdf), max(flag(useCode.equal(3.0)), flag(useCode.equal(4.0))).mul(0.6));
   const grain = hash(positionWorld.xz.mul(7.3).add(positionWorld.y.mul(5.1)));
 
   let wall = plaster.mul(float(0.9).add(grain.mul(0.16)));
@@ -86,7 +98,9 @@ export function createBuildingMaterial() {
   // Tile courses run along the contour lines (constant y), with a little mottling per tile
   const courses = fract(positionWorld.y.mul(6.5));
   const tileHash = hash(floor(positionWorld.xz.mul(0.8)));
-  const tiles = mix(color(0xa8502f), color(0x934329), tileHash.mul(0.6)).mul(float(0.86).add(courses.mul(0.2)));
+  let tiles = mix(color(0xa8502f), color(0x934329), tileHash.mul(0.6)).mul(float(0.86).add(courses.mul(0.2)));
+  // farm and industrial pitched roofs are sheet metal, not clay tile
+  tiles = mix(tiles, color(0x8a8f94).mul(float(0.9).add(courses.mul(0.15))), max(flag(useCode.equal(1.0)), flag(useCode.equal(2.0))).mul(0.85));
   const gravel = mix(color(0x9d9a92), color(0x84827b), hash(positionWorld.xz.mul(2.3)));
 
   let colorNode = wall;
