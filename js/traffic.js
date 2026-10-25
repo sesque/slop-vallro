@@ -293,10 +293,44 @@ export function createTraffic(scene, { laneGraph, pavements, groundHeight, insid
     crowd.end();
   }
 
+  // The cars as colliders for the player (js/controllers.js dynamicColliders): three circles along the body, like the player's own car
+  const carPool = [];
+  const carOut = [];
+  const makeCarCollider = () => {
+    const c = { minX: 0, maxX: 0, minZ: 0, maxZ: 0, maxY: 2.2, sx: 0, sz: 0, cx: 0, cz: 0 };
+    c.pushOut = (px, pz, r) => {
+      let best = null, depth = 0;
+      for (const off of [-1.3, 0, 1.3]) {
+        const ox = c.cx + c.sx * off, oz = c.cz + c.sz * off;
+        const d = Math.hypot(px - ox, pz - oz), reach = r + 0.95, pen = reach - d;
+        if (pen > depth) {
+          depth = pen;
+          const nx = d > 1e-9 ? (px - ox) / d : -c.sz, nz = d > 1e-9 ? (pz - oz) / d : c.sx;
+          best = { x: ox + nx * reach, z: oz + nz * reach, nx, nz };
+        }
+      }
+      return best;
+    };
+    return c;
+  };
+  function collidersNear(x, z, r) {
+    carOut.length = 0;
+    for (const car of sim.cars) {
+      if (!car.active) continue;
+      const mx = car.x + Math.sin(car.yaw) * WHEELBASE_CENTER, mz = car.z + Math.cos(car.yaw) * WHEELBASE_CENTER;
+      if (Math.abs(mx - x) > r + 4 || Math.abs(mz - z) > r + 4) continue;
+      const c = carPool[carOut.length] || (carPool[carOut.length] = makeCarCollider());
+      c.cx = mx; c.cz = mz; c.sx = Math.sin(car.yaw); c.sz = Math.cos(car.yaw);
+      c.minX = mx - 3; c.maxX = mx + 3; c.minZ = mz - 3; c.maxZ = mz + 3; c.maxY = car.y + 2;
+      carOut.push(c);
+    }
+    return carOut;
+  }
+
   const stats = () => ({
     cars: sim.cars.filter((c) => c.active).length, carsDrawn: visibleCars, people: walkers.people.filter((p) => p.active).length,
     peopleDrawn: visiblePeople, waiting: sim.cars.filter((c) => c.active && c.stuck > 20).length, ...sim.stats
   });
 
-  return { group, sim, walkers, update, stats };
+  return { group, sim, walkers, update, stats, collidersNear };
 }

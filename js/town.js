@@ -142,6 +142,11 @@ export async function initTown() {
 
   const controllerManager = new ThirdPersonControllerManager(scene, [...buildings.colliders, ...features.colliders, ...props.colliders]);
   controllerManager.setWorld(world);
+  // woodland trunks and traffic cars stop the player too (they are not in the static collider list)
+  controllerManager.dynamicColliders = (x, z, r) => {
+    const trunks = woodland ? woodland.collidersNear(x, z, r) : [];
+    return trunks.concat(traffic.collidersNear(x, z, r));
+  };
   const cameraSystem = new CameraSystem(renderer.domElement, controllerManager);
   cameraSystem.setWorld(world);
   const touchControls = new TouchControls(controllerManager);

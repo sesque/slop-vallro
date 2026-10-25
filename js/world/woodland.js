@@ -1,4 +1,5 @@
 import { createTreeField } from '../trees.js';
+import { createTrunkField } from './trunks.js';
 
 // js/world/woodland.js
 // The woods of the municipality as instanced trees, planted from the baked canopy height grid (data/canopy.*): a tree in
@@ -46,5 +47,6 @@ export function buildWoodland(scene, canopy, options) {
   const sites = woodlandSites(canopy, options);
   const field = createTreeField(scene, sites, WOODLAND_LOD);
   scene.add(field.group);
-  return { field, sites, update: field.update, stats: { trees: sites.length } };
+  const trunks = createTrunkField(sites);
+  return { field, sites, update: field.update, collidersNear: trunks.near, stats: { trees: sites.length } };
 }

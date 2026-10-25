@@ -146,7 +146,7 @@ facade detail yet); about 2.5 M triangles in a typical view at 90 to 120 fps in 
 - [x] Instanced woodland (`js/world/woodland.js`): 131 993 trees from the canopy grid (one per about 55 m2 where the vegetation is above
       4.5 m, not on streets, not in a cell with a surveyed tree), through the upstream tree field with `maxDist` 520 m, so about 10 000
       are drawn at a time. 120 fps flying over it and 71 fps standing in the thick of it (1007 x 1077 px preview). Limits: the three
-      upstream species (plane, locust, elm) stand for pines and oaks, and woodland trees have no colliders. `?nowoods` leaves them out.
+      upstream species (plane, locust, elm) stand for pines and oaks (woodland trunks now stop the player, see Phase 10). `?nowoods` leaves them out.
 - [x] Catastro (`tools/vallromanes/catastro.mjs`, raw files in `raw/catastro`, fetched by hand with `curl -k` because the server's certificate chain
       is incomplete): parts are joined to the BUE footprints by centroid. 1 948 buildings and sheds joined, floors changed in 841 (the BUE
       count overcounted by one in many two-floor houses); `use` and `year` baked for them. The facade shader reads them: older houses
@@ -207,3 +207,11 @@ facade detail yet); about 2.5 M triangles in a typical view at 90 to 120 fps in 
 | Sparse OSM attributes | Sensible defaults plus manual overrides (small town, a few dozen streets) |
 | Steep slopes break vehicle physics | Burn road profiles into the terrain; clamp the slope response; test early (Milestone C) |
 | WebGPU performance on many walls and stairs | Merge per chunk, instance repeated elements, cull aggressively |
+
+## Phase 10 — Collisions and sound
+- [x] The player no longer walks or drives through woodland trunks or traffic cars. `js/world/trunks.js` keeps a grid of the 132 000 trunk positions
+      and hands out pooled circle colliders for the ones near a point (no collider object per tree); `traffic.collidersNear` gives three circles
+      per nearby car; `controllers.js` asks `dynamicColliders(x, z, r)` (set in `town.js`) besides its static colliders, so crashes into them also
+      slow the vehicle and fire the collision event. Checked in the browser: a person is pushed to trunk radius plus body radius, a car collider
+      to 0.95 m plus body radius. Not done: traffic cars do not react to being hit (they brake for the player, but are not pushed), and walkers
+      still do not avoid the player.

@@ -869,6 +869,8 @@ class ThirdPersonControllerManager {
     let gx = pos.x;
     let gz = pos.z;
     let near = this.nearColliders(gx, gz, reach);
+    // moving or numerous things that are not worth a static collider each: woodland trunks, traffic cars (set by town.js)
+    if (this.dynamicColliders) near = near.concat(this.dynamicColliders(gx, gz, reach));
     for (let i = 0; i < near.length; i++) {
       const c = near[i];
       if (yHeight > c.maxY + 1.5) continue;
