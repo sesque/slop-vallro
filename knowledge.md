@@ -173,7 +173,7 @@ index contour labels 331.
 - All outer rings are counter-clockwise in UTM (clockwise once z = −N). 89 buildings have extra parts, and all 103 of them are **courtyards (holes)** inside their building, never separate pieces. Z is constant per polygon for every structure kind.
 - 4 313 structures are baked after removing 2 outside the boundary: 2 906 buildings, 836 sheds, 316 porches, 81 canopies, 98 construction, 31 tanks, 14 ruins, 15 greenhouses, 7 under construction, 5 monuments, 3 cemetery, 1 tower. Simplifying to 0.1 m cuts 35 892 vertices to 26 085.
 - Heights above the lowest ground at the footprint: buildings P10 3.0, **P50 6.0**, P90 9.8 m; floors (3 m) 1: 1 190, 2: 1 162, 3: 463, 4+: 91. 1 566 buildings are nearly rectangular and get a hip roof.
-- **Flags:** 126 of 2 906 buildings (4.3 %) are flagged for review, against the 1 % gate of spec §8, almost all as "buried" (BUE top within 0.3 m of the highest ground at the footprint; 41 even stay below the median ground). Sheds, tanks and construction are flagged far more often. The LiDAR surface model can replace these tops in Phase 8.
+- **Flags (before the LiDAR correction; now 16 of 2 906, 0.55 %, see plan.md Phase 8):** 126 of 2 906 buildings (4.3 %) are flagged for review, against the 1 % gate of spec §8, almost all as "buried" (BUE top within 0.3 m of the highest ground at the footprint; 41 even stay below the median ground). Sheds, tanks and construction are flagged far more often. The LiDAR surface model can replace these tops in Phase 8.
 
 ### 3.7 What the street data gives (measured)
 - **Centrelines:** 125 paved urban lines (31.7 km), 28 unpaved urban (2.4 km), 39 other paved roads (4.2 km), 363 tracks (24.1 km). Their Z agrees with the DTM within 0.2 m (P10 to P90), so they are used as the road profile after smoothing. Grades: median 5.8 %, P90 14 %, max 34 %.
@@ -192,6 +192,14 @@ index contour labels 331.
 - 358 drivable edges (urban, urbanUnpaved, road) = 38.3 km, which is 70 km of lanes. Node degree: 109 dead ends, 46 pass-through, 161 three-way, 8 four-way. 19 components, the largest 87.7 % of the length. 62 one-way edges, 358 edges have 2 lanes or fewer.
 - Posted speed: 30 km/h on 274 edges, 20 on 38, 50 on 33, 40 on 4, 70 on 6, 90 on 3. Edge length P10 15 m, median 80 m, P90 241 m: junctions often sit within 30 m of each other, which is why traffic treats them as clusters (a car between two of them cannot hold one and wait for the other).
 - Data convention to remember: `halfL`/`swL` is the side with positive lateral, (-dz, dx) of the direction a to b, which in the z-south map is the **right-hand** side when travelling a to b. Lanes and pavements use it that way.
+
+### 3.10 What the Catastro building files hold (measured)
+- Source: `https://www.catastro.hacienda.gob.es/INSPIRE/Buildings/08/08297-VALLROMANES/A.ES.SDGC.BU.08297.zip`, 0.69 MB (15 MB unpacked: `building`, `buildingpart` and `otherconstruction` GML, ISO-8859-1, EPSG:25831). The server's certificate chain is incomplete, so curl needs `-k` (done once, for this public file; the user agreed). The ATOM index is `.../Buildings/08/ES.SDGC.BU.atom_08.xml`. Catastro's code for Vallromanes is 08297; it lists 08296 as Vallirana.
+- 991 `Building` and 3 636 `BuildingPart` features. `Building` has `currentUse` (923 residential, 21 agriculture, 17 industrial, 10 public services, 6 retail, 14 empty), `numberOfDwellings`, `conditionOfConstruction` (966 functional, 8 declined, 4 ruin) and `dateOfConstruction`. `BuildingPart` has `numberOfFloorsAboveGround` (0: 205, 1: 2 168, 2: 1 095, 3: 148, 4: 20) and below ground.
+- **Year of construction:** present for 978 of 991 (36 are the placeholder 1900). Median 1988. By decade: 1960s 112, 1970s 168, 1980s 108, 1990s 149, 2000s 249, 2010s 35, 2020s 45, and only about 80 before 1960. So the village is overwhelmingly modern; a visible "old town" style would apply to few buildings.
+- **Join to the BUE:** 3 279 of 3 636 parts (90 %) have their centroid inside a BUE structure, covering 2 195 of the 4 313 structures (the rest are sheds, porches, tanks and the like). BUE top minus base by Catastro floors: 0 floors 3.4 m, 1: 5.3 m, 2: 8.3 m, 3: 10.2 m, 4: 13.6 m, so heights and floors agree.
+- **The BUE `floors` field overcounts:** it equals the Catastro maximum in 1 242 of 2 195 matches; in 413 BUE says 2 where Catastro says 1, and in 245 it says 3 where Catastro says 2. Catastro floors should replace it.
+- **Flagged buildings:** only 86 of the 313 BURIED-flagged structures have Catastro floors, so Catastro does not fix the 4.3 % flag rate; the LiDAR roof level can.
 
 ## 4. Decisions so far
 - Primary geometry comes from **BUE 1:1000 SHP**. Building floor counts come from **Catastro**. Terrain comes

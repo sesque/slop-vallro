@@ -148,7 +148,11 @@ facade detail yet); about 2.5 M triangles in a typical view at 90 to 120 fps in 
       are drawn at a time. 120 fps flying over it and 71 fps standing in the thick of it (1007 x 1077 px preview). Limits: the three
       upstream species (plane, locust, elm) stand for pines and oaks, and woodland trees have no colliders. `?nowoods` leaves them out.
 - [ ] `fetch-catastro.sh` (ATOM 08 → 08297 ZIP); join BuildingParts → floors, use, year; reconcile with heights.
-- [ ] Roofs from `CON_29` ridges and slope arrows; optionally fit to LiDAR.
+- [x] Roofs and tops from the LiDAR surface model (`tools/vallromanes/lidar-roofs.mjs`, used by `build-buildings.mjs` when the 1 m DSM window is on
+      disk; no new download): 413 BUE tops replaced by the LiDAR roof level (median +0.69 m, the buried ones included), 446 of the 1 566
+      hip roofs made flat (eave-to-ridge relief under 0.9 m, so terraces), 790 hip rises set from the measured relief, 1 377 small
+      structures without enough pixels left as they were. **Flagged buildings: 4.3 % -> 0.55 % (16 of 2 906), inside the 1 % gate of spec §8.**
+      Not done: gable and shed roofs, ridge direction from the LiDAR, `CON_29` ridge lines.
 - [ ] Facade and material styles by POUM zone (hand-digitised `overrides/zoning.geojson`, or the official
       georeferenced POUM).
 - [ ] Special buildings: a hand-modelled or parameterised church, Ajuntament, school and farmhouses ("Can …").

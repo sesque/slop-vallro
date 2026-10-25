@@ -10,6 +10,7 @@ import { E0, N0, H0, toLocal } from './frame.mjs';
 import { readBue } from './read-bue.mjs';
 import { loadTerrain } from '../../js/geo/load-geodata.js';
 import { fsFetch } from './fs-fetch.mjs';
+import { roofStats, loadDsm } from './lidar-roofs.mjs';
 import { centroid, orientedBox, pointInRings, reverseRing, signedArea, simplifyRing } from '../../js/geo/polygon.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -31,7 +32,9 @@ export const KINDS = [
   { name: 'tower', re: /^ENE_03pol_PL$/, open: false }
 ];
 export const ROOF = { FLAT: 0, HIP: 1 };
-export const FLAG = { TALL: 1, SHORT: 2, BURIED: 4, LOW_TOP: 8 };
+export const FLAG = { TALL: 1, SHORT: 2, BURIED: 4, LOW_TOP: 8, LIDAR_TOP: 16 };
+export const LIDAR_TOP_DIFF = 1.2; // m: a BUE top this far from the LiDAR roof level is replaced by it
+export const LIDAR_FLAT_RELIEF = 0.9; // m between eave and ridge below which a roof counts as flat
 export const MIN_HEIGHT = 2.2; // spec §5.3
 const MIN_AREA = 0.2; // m², below this a polygon is a survey artefact
 const FLOOR_HEIGHT = 3.0;
@@ -101,11 +104,40 @@ export function chooseRoof(outer, holes, kindIndex) {
   return { roof: ROOF.HIP, rise: +Math.max(0.6, Math.min(2.2, box.hz * 0.35)).toFixed(2) };
 }
 
-export function buildBuildings(features, ground, boundaryRings) {
+/**
+ * Corrects a baked building with its LiDAR roof statistics `st` ({ median, eave, ridge } in local y, or null): a BUE top buried in
+ * the ground or more than LIDAR_TOP_DIFF from the roof level takes the roof level; a hip roof whose eave-to-ridge relief is under
+ * LIDAR_FLAT_RELIEF becomes flat, and a hip roof takes its rise from the relief. Only buildings and sheds (kinds 0 and 1).
+ * `d` = describeStructure's result and `roof` = chooseRoof's; returns the new { top, floors, flags, roof, rise, changed }.
+ */
+export function refineWithLidar(d, roof, st, kindIndex, open, baseMean) {
+  const out = { top: d.top, floors: d.floors, flags: d.flags, roof: roof.roof, rise: roof.rise, changed: { top: false, roof: false } };
+  if (!st || kindIndex > 1) return out;
+  const bad = d.flags & (FLAG.BURIED | FLAG.SHORT | FLAG.LOW_TOP);
+  if (bad || Math.abs(d.top - st.median) > LIDAR_TOP_DIFF) {
+    const top = Math.max(st.median, d.baseMax + 0.3);
+    if (top - d.base >= MIN_HEIGHT) {
+      out.top = top;
+      out.flags = (d.flags & ~(FLAG.BURIED | FLAG.SHORT | FLAG.LOW_TOP)) | FLAG.LIDAR_TOP;
+      if (top - d.base > 30) out.flags |= FLAG.TALL;
+      out.floors = open ? 1 : Math.max(1, Math.min(10, Math.round((top - baseMean) / FLOOR_HEIGHT)));
+      out.changed.top = true;
+    }
+  }
+  if (roof.roof === ROOF.HIP) {
+    const relief = st.ridge - st.eave;
+    if (relief < LIDAR_FLAT_RELIEF) { out.roof = ROOF.FLAT; out.rise = 0; out.changed.roof = true; }
+    else { out.rise = +Math.max(0.6, Math.min(4, relief)).toFixed(2); out.changed.roof = Math.abs(out.rise - roof.rise) > 0.3; }
+  }
+  return out;
+}
+
+export function buildBuildings(features, ground, boundaryRings, lidar = null) {
   const records = [];
   const rings = [];
   let ringVerts = 0;
   const dropped = { degenerate: 0, outside: 0 };
+  const lidarCount = { topReplaced: 0, flattened: 0, riseSet: 0, noPixels: 0 };
   const ids = new Set();
   const seen = { vertsBefore: 0, vertsAfter: 0 };
 
@@ -124,8 +156,18 @@ export function buildBuildings(features, ground, boundaryRings) {
       if (!near) { dropped.outside++; continue; }
     }
     const top = f.coords[0][1];
-    const d = describeStructure(outer, top, ground, KINDS[kindIndex].open);
-    const roof = chooseRoof(outer, holes, kindIndex);
+    let d = describeStructure(outer, top, ground, KINDS[kindIndex].open);
+    let roof = chooseRoof(outer, holes, kindIndex);
+    if (lidar) {
+      const st = kindIndex <= 1 ? roofStats([outer, ...holes], lidar) : null;
+      if (kindIndex <= 1 && !st) lidarCount.noPixels++;
+      const r = refineWithLidar(d, roof, st, kindIndex, KINDS[kindIndex].open, d.baseMean);
+      if (r.changed.top) lidarCount.topReplaced++;
+      if (r.changed.roof && r.roof === ROOF.FLAT) lidarCount.flattened++;
+      else if (r.changed.roof) lidarCount.riseSet++;
+      d = { ...d, top: r.top, floors: r.floors, flags: r.flags };
+      roof = { roof: r.roof, rise: r.rise };
+    }
     const allRings = [outer, ...holes];
     const cm = allRings.map((r) => r.map((v) => Math.round(v * 100)));
     let id = stableId(f.cas, cm.flat());
@@ -143,7 +185,7 @@ export function buildBuildings(features, ground, boundaryRings) {
   const bin = new Int32Array(ringVerts * 2);
   let o = 0;
   for (const r of rings) { bin.set(r, o); o += r.length; }
-  return { records, bin, dropped, seen };
+  return { records, bin, dropped, seen, lidarCount };
 }
 
 async function main() {
@@ -153,7 +195,10 @@ async function main() {
   const features = readBue(path.join(RAW, 'bue'), { transform: toLocal });
 
   const ground = (x, z) => sampler.heightAt(x, z);
-  const { records, bin, dropped, seen } = buildBuildings(features, ground, boundary.rings);
+  const lidar = loadDsm(path.join(RAW, 'icgc/dtm'));
+  console.log(lidar ? 'LiDAR DSM found: roofs and tops are checked against it' : 'No LiDAR DSM (fetch-icgc-dtm.mjs --product dsm --level 0): BUE tops only');
+  const { records, bin, dropped, seen, lidarCount } = buildBuildings(features, ground, boundary.rings, lidar);
+  if (lidar) console.log(`LiDAR: ${lidarCount.topReplaced} tops replaced by the roof level, ${lidarCount.flattened} hip roofs made flat, ${lidarCount.riseSet} hip rises set from the relief, ${lidarCount.noPixels} buildings without enough pixels`);
   if (!records.length) throw new Error('No structures baked');
   for (const r of records) {
     if (![r.base, r.baseMax, r.top].every(Number.isFinite)) throw new Error(`Non-finite height in ${r.id}`);
