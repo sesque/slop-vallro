@@ -46,7 +46,7 @@ function offsetLine(pts, off) {
 
 /**
  * `roads` = { nodes, edges } as in data/roads.json; `trims` = nodeTrims(...) from street-geometry.js.
- * Returns { links, nodes } with links { id, kind: 'walk' | 'cross', edge, node, x[], z[], cum[], length, ends: [[{ link, end }], [...]] }:
+ * Returns { links, nodes } with links { id, kind: 'walk' | 'corner' | 'cross', edge, node, x[], z[], cum[], length, ends: [[{ link, end }], [...]] }:
  * `ends[0]` lists where a walker leaving the start of the link may go on, `ends[1]` the same at its far end.
  */
 export function buildPavementGraph(roads, trims = []) {
@@ -90,8 +90,18 @@ export function buildPavementGraph(roads, trims = []) {
     if (k < 2) continue;
     for (let i = 0; i < k; i++) {
       const s = spokes[i], t = spokes[(i + 1) % k];
-      // the +angle side of s meets the -angle side of the next spoke round the node
-      if (s.plus && t.minus && s.plus !== t.minus) join(s.plus, s.end, t.minus, t.end);
+      // the +angle side of s meets the -angle side of the next spoke round the node, over a short link across the corner (the two ends
+      // can be several metres apart, and a walker must walk it, not jump it)
+      if (s.plus && t.minus && s.plus !== t.minus) {
+        const a = s.plus, b = t.minus;
+        const ia = s.end === 0 ? 0 : a.x.length - 1, ib = t.end === 0 ? 0 : b.x.length - 1;
+        if (Math.hypot(a.x[ia] - b.x[ib], a.z[ia] - b.z[ib]) < 0.25) join(a, s.end, b, t.end);
+        else {
+          const c = make('corner', s.edge.id, n.id, [[a.x[ia], a.z[ia], a.y[ia]], [b.x[ib], b.z[ib], b.y[ib]]]);
+          join(a, s.end, c, 0);
+          join(b, t.end, c, 1);
+        }
+      }
     }
     if (k >= 3) {
       for (const s of spokes) {

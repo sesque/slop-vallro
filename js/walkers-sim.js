@@ -15,6 +15,8 @@ const mulberry = (seed) => {
 };
 
 const _o = { x: 0, z: 0, tx: 0, tz: 0 };
+const MAX_SPEED = 2.6; // m/s a walker's body may move towards its spot on the pavement
+const TURN_RATE = 5; // rad/s
 
 /** Position and unit tangent at arc length s of a link. */
 export function linkAt(link, s, out = _o) {
@@ -69,12 +71,19 @@ export class WalkerSim {
     return this.links[this.links.length - 1];
   }
 
-  place(p) {
+  // Puts the walker on its link. `dt` > 0 eases the position and heading towards the spot (at most MAX_SPEED m/s and TURN_RATE rad/s), so a
+  // bend or a corner never makes the body jump or spin; without `dt` (a spawn) it snaps.
+  place(p, dt = 0) {
     linkAt(p.link, p.s);
     const nx = -_o.tz, nz = _o.tx;
-    p.x = _o.x + nx * p.lat;
-    p.z = _o.z + nz * p.lat;
-    p.heading = Math.atan2(_o.tx * p.dir, _o.tz * p.dir);
+    const tx = _o.x + nx * p.lat, tz = _o.z + nz * p.lat;
+    const heading = Math.atan2(_o.tx * p.dir, _o.tz * p.dir);
+    if (!dt) { p.x = tx; p.z = tz; p.heading = heading; return; }
+    const dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz), reach = MAX_SPEED * dt;
+    if (d > reach) { p.x += (dx / d) * reach; p.z += (dz / d) * reach; } else { p.x = tx; p.z = tz; }
+    let dh = heading - p.heading;
+    dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+    p.heading += Math.max(-TURN_RATE * dt, Math.min(TURN_RATE * dt, dh));
   }
 
   spawn(p, fx, fz, rMin, rMax, needHidden = true) {
@@ -95,6 +104,7 @@ export class WalkerSim {
       p.crossing = null;
       p.waiting = 0;
       p.placedFresh = true;
+      p.spawns = (p.spawns || 0) + 1; // lets a check tell a respawn from a step
       this.place(p);
       this.stats.spawned++;
       return true;
@@ -151,12 +161,13 @@ export class WalkerSim {
     if (p.pause > 0) {
       p.pause -= dt;
       p.speed = 0;
+      this.place(p, dt); // keeps turning to face the way it will walk
       return;
     }
     let want = p.pace;
     // waiting at the kerb for the way across to be clear
     if (p.waitFor) {
-      if (this.clearToCross(p.waitFor.link) || (p.waiting += dt) > 25) {
+      if (this.clearToCross(p.waitFor.link)) {
         p.link = p.waitFor.link;
         p.dir = p.waitFor.end === 0 ? 1 : -1;
         p.s = p.waitFor.end === 0 ? 0 : p.link.length;
@@ -166,8 +177,15 @@ export class WalkerSim {
         this.stats.crossings++;
         p.waitFor = null;
         p.waiting = 0;
+      } else if ((p.waiting += dt) > 25) {
+        // never step out under a car: after a long wait turn back and go another way
+        p.waitFor = null;
+        p.waiting = 0;
+        p.dir = -p.dir;
+        p.pause = 0.7;
       } else {
         p.speed = 0;
+        this.place(p, dt);
         return;
       }
     }
@@ -181,9 +199,11 @@ export class WalkerSim {
       const next = this.chooseNext(p, end);
       if (!next) {
         // turn round (and sometimes stand a moment)
+        // stop first: turning on the spot while walking made the legs spin
         p.dir = -p.dir;
         p.s = end === 1 ? p.link.length - 0.01 : 0.01;
-        if (this.rnd() < 0.3) p.pause = 3 + this.rnd() * 7;
+        p.speed = 0;
+        p.pause = this.rnd() < 0.3 ? 3 + this.rnd() * 7 : 0.7;
       } else if (next.link.kind === 'cross') {
         p.s = end === 1 ? p.link.length : 0;
         p.speed = 0;
@@ -196,7 +216,7 @@ export class WalkerSim {
         if (this.rnd() < 0.08) p.pause = 3 + this.rnd() * 9;
       }
     }
-    this.place(p);
+    this.place(p, dt);
   }
 
   update(dt, fx, fz, jumped = false) {

@@ -146,3 +146,29 @@ test('no deadlocks: over half an hour of driving at three places, cars keep movi
     assert.ok(sim.cars.filter((c) => c.active).length > 10);
   }
 });
+
+test('walkers never jump or spin: every step on the real pavements is short and every turn gradual', () => {
+  const roads = JSON.parse(fs.readFileSync(fileURLToPath(new URL('../data/roads.json', import.meta.url)), 'utf8'));
+  const trims = nodeTrims(roads.nodes.map((p) => ({ x: p[0], z: p[1], y: p[2] })), roads.edges);
+  const g = buildLaneGraph(roads, { trims });
+  const pav = buildPavementGraph(roads, trims);
+  assert.ok(pav.links.filter((l) => l.kind === 'corner').length > 100, 'the corners are links, not teleports');
+  const walkers = new WalkerSim(pav, g, { count: 80, seed: 3 });
+  walkers.reset(0, 0, 500);
+  const prev = new Map();
+  let maxStep = 0, maxTurn = 0;
+  for (let i = 0; i < 6000; i++) {
+    walkers.update(0.1, 0, 0);
+    for (const p of walkers.people) {
+      if (!p.active) continue;
+      const q = prev.get(p.id);
+      if (q && q.spawns === p.spawns) {
+        maxStep = Math.max(maxStep, Math.hypot(p.x - q.x, p.z - q.z));
+        maxTurn = Math.max(maxTurn, Math.abs(Math.atan2(Math.sin(p.heading - q.h), Math.cos(p.heading - q.h))));
+      }
+      prev.set(p.id, { x: p.x, z: p.z, h: p.heading, spawns: p.spawns });
+    }
+  }
+  assert.ok(maxStep < 0.4, `longest step ${maxStep.toFixed(2)} m in 0.1 s`);
+  assert.ok(maxTurn < 0.55, `sharpest turn ${maxTurn.toFixed(2)} rad in 0.1 s`);
+});

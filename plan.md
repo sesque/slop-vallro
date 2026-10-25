@@ -221,3 +221,8 @@ facade detail yet); about 2.5 M triangles in a typical view at 90 to 120 fps in 
       mute it, and the choice is remembered. Building the sounds takes about 0.2 s on that first click. It runs without errors in Chrome (context
       running, voices created and removed with the mode); **it has not been listened to**, so levels and the engine character need an ear.
       Not done: birdsong or cicadas, church bells, traffic horns, voices of walkers (the synthesis for horns and speech exists in `audio-events.js`).
+
+## Phase 11 — Shop signs and walker fixes
+- [x] Walkers no longer jump or spin: the corners of the pavement graph are now short links that are walked (before, a walker was moved up to 17.8 m in one step
+      from the end of one pavement to the start of the next), position and heading are eased (at most 2.6 m/s and 5 rad/s), and a walker stops before turning
+      round or turns back instead of crossing under a car after a long wait. Longest step 0.26 m per 0.1 s, sharpest turn 0.5 rad, over 20 simulated minutes of 100 walkers.
