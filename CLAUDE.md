@@ -12,6 +12,7 @@ Read these before working:
 | `knowledge.md` | Everything learned so far: how the New York repo works, which data sources exist for Vallromanes, what is in the delivered 1:1000 shapefiles, measured stats. |
 | `spec.md` | Technical specification: coordinate frame, data model, pipeline stages, runtime module changes, libraries, conventions. |
 | `plan.md` | Phased implementation plan with acceptance criteria. Work through it in order and tick items off. |
+| `report.md` | The findings of the build and how each source contributed to the environment. |
 
 ## Ground rules
 
@@ -40,8 +41,8 @@ Read these before working:
 
 ```bash
 npm run inventory   # report on raw BUE shapefiles
-npm run geodata     # bake boundary, roads, stairs, terrain, buildings, features, props, labels → data/ (+ manifest.json); needs the raw data
+npm run geodata     # bake boundary, roads, stairs, terrain, buildings, features, props, canopy, labels, shops → data/ (+ manifest.json); needs the raw data
 node tools/vallromanes/fetch-osm.mjs   # optional: OSM highways for oneway/lanes/maxspeed (network)
 npm test            # node tests (tests/*.test.*)
-npx serve .         # open http://localhost:3000 in a WebGPU browser
+python3 -m http.server 3000   # (or npx serve .) then open http://localhost:3000 in a WebGPU browser: Chrome, Edge or Safari
 ```

@@ -1,283 +1,247 @@
-# Technical specification — Slop Vallromanes
+# Technical specification — Slop Vallromanes (as built)
 
-Status: draft v0.1. Source facts are in `knowledge.md`.
+Status: v1.0, describes the application as it stands on `main` (commit `a5ee15f` and later). It replaces the design-time draft v0.1;
+that draft's decisions are kept where they were followed and replaced where the build taught something else. Measured facts and
+the findings are in `knowledge.md` and `report.md`; the history of the work is in `plan.md`.
 
-## 1. Goals and non-goals
+## 1. What it is
 
-**Scope:** the world is the **whole municipality** (INE 08296), clipped to its official boundary polygon plus a
-small terrain buffer beyond it. The boundary is a **hard edge**: the player, vehicles and pedestrians are
-constrained inside the polygon (a collision wall along the boundary segments), and the buffer is only visual. The BUE 1:1000 (about 3.9 × 2.7 km, urban areas only) is the
-high-detail core; everything else uses lower-detail sources (ICGC DTM, RTT, OSM, LiDAR-derived tree cover).
+A browser simulation of the municipality of Vallromanes (INE 08296, Vallès Oriental, Barcelona), forked from
+[mrdoob/slop-newyork](https://github.com/mrdoob/slop-newyork). It is plain ES modules on three.js WebGPURenderer and TSL, with
+**no build step**: everything about the town is baked offline by Node scripts into static files under `data/`, which the page loads.
+The player walks, drives, cycles or flies over the real terrain, buildings, streets, walls, stairs, trees and street lamps of the
+municipality, with cars and people going about, synthesised sound, a map and teleports, and the sun of 41.5° N on 15 September.
 
-**Goals**
-- A walkable, drivable, flyable simulation of Vallromanes (urban core in full detail, the rest of the
-  municipality at lower detail) that is faithful to real geometry:
-  terrain, buildings with real footprints and heights, streets, pavements, walls, stairs, trees and lamps.
-- Same tech and spirit as upstream: three.js WebGPU + TSL, no bundler, data pre-baked offline, nothing fetched
-  from third parties at runtime except the pinned three.js (which can optionally be vendored).
-- A reproducible pipeline: the same raw inputs produce byte-identical outputs.
+**Scope.** The world is the whole municipality, clipped to its official boundary. The boundary is a **hard edge**: the player,
+vehicles and traffic cannot cross it (the 3 m margin in `js/town.js`), and the terrain just outside it is only a visual skirt.
+The high-detail core is the Diputació's urban map (BUE 1:1000), which covers **4.90 km², 46.3 % of the municipality**; the rest is
+terrain, tinted ground and woodland from the LiDAR (see §4 and `report.md` for what is, and is not, modelled outside the BUE).
 
-**Non-goals (for now)**
-- Interiors, live data (traffic, weather), photogrammetric textures, the full municipality forest at
-  high detail.
+**Non-goals.** Interiors, live data (weather, real traffic), photogrammetric textures, buses, buildings outside the BUE.
 
 ## 2. Coordinate frame
 
-- Source CRS: **EPSG:25831** (ETRS89 / UTM 31N). All sources are converted to it first; Catastro GML is
-  normally already in EPSG:25831, so check `srsName`.
-- **Local frame** (runtime units are metres):
-  - `x = E − E0` (east is +x)
-  - `z = −(N − N0)` (north is −z, the three.js and upstream convention)
-  - `y = H − H0` (up), where H is orthometric height in metres (ETRS89 / Alicante heights)
-- Origin constants live in `tools/vallromanes/frame.mjs` and are copied into the generated manifest.
-  - The frame covers the whole municipality, so the extent can be several times the ±2.5 km assumed below;
-    float32 precision still holds (about 1 mm at 10 km) but check it once the boundary is known.
-  - Proposal: `E0, N0` at the Ajuntament label point, rounded to the metre (find it in `t`, `TOP_09EQ`
-    "Ajuntament"). Alternatively use the bbox centre, about (441 450, 4 598 000).
-  - `H0` is the round-number 10 m floor below the minimum DTM height **over the whole municipality** (not the
-    BUE area). Current value: 70 m, from the DTM window minimum of 82.65 m. This keeps `y ≥ 0`.
-- **No rotation.** Unlike Manhattan, there is no dominant grid.
-- Precision: a ±2.5 km extent in float32 gives about 0.25 mm resolution, which is fine.
+- Source CRS: **EPSG:25831** (ETRS89 / UTM zone 31N). Every source is converted to it first; degrees (OpenStreetMap, map sites) go
+  through `tools/vallromanes/utm.mjs` (Krueger series, mm accuracy). The runtime never sees degrees.
+- Local frame, metres, no rotation (there is no dominant street grid): `x = E − E0` (east +x), `z = N0 − N` (north is −z),
+  `y = H − H0` (up). `E0 = 441417`, `N0 = 4598030` (the Ajuntament label point rounded to the metre), `H0 = 70` m (10 m below the
+  lowest DTM height of the download window, 82.65 m). Constants live in `tools/vallromanes/frame.mjs` and in `data/manifest.json`.
+- The frame spans about −2.6 … +3.0 km in x and −1.5 … +2.3 km in z, so float32 is accurate to better than a millimetre.
+- Heading convention: a body with heading ψ faces `(sin ψ, cos ψ)`. Lateral side convention of the street data: `halfL`/`swL` is the
+  side of positive lateral `(−dz, dx)` of the direction a → b, which in this z-south frame is the **right-hand** side.
 
-## 3. Repository organisation
+## 3. Repository layout (as built)
 
 ```
-slop-vallro/                 (fork of mrdoob/slop-newyork)
-├─ CLAUDE.md  knowledge.md  spec.md  plan.md  README.md (with attribution)
-├─ index.html                     import map: three pinned to an exact version
+slop-vallro/
+├─ index.html            import map (three.js pinned to dev commit fae8734, r187dev), module preloads, HUD markup
+├─ css/style.css         HUD, loader, map
 ├─ js/
-│  ├─ main.js                     same orchestration; new builders wired in
-│  ├─ geo/                        NEW runtime data access
-│  │  ├─ load-geodata.js          fetch manifest + binaries → GEO object
-│  │  ├─ terrain-sampler.js       heightAt(x,z), normalAt(x,z) (bilinear on the grid)
-│  │  └─ spatial-index.js         uniform grid / quadtree for colliders & queries
-│  ├─ world/                      NEW city-specific builders
-│  │  ├─ terrain.js               chunked terrain mesh + LOD
-│  │  ├─ buildings.js             extruded footprints, roofs, facade materials
-│  │  ├─ streets.js               road surfaces, kerbs, pavements, markings
-│  │  ├─ walls-stairs.js          walls, retaining walls, fences, railings, stairs
-│  │  ├─ props.js                 trees, lamps, poles, manholes, pools (instanced)
-│  │  └─ labels.js                street names, place names, teleport points
-│  ├─ road-graph.js               replaces road-network.js (general graph)
-│  ├─ traffic.js                  adapted to road-graph.js
-│  ├─ controllers.js              adapted: terrain ground, polygon/segment colliders
-│  ├─ town-map.js                 replaces nyc-map.js
-│  └─ (kept) cameras, lighting, post-processing, tsl-materials, pedestrians,
-│      actor-models, vehicle-lights, trees, audio-*, scene-culling, touch/gamepad
-├─ data/                          GENERATED, committed
-│  ├─ manifest.json               frame, bbox, counts, versions, attribution, file list
-│  ├─ terrain.bin                 uint16 height grid (+ header in manifest)
-│  ├─ buildings.bin / .json       footprints + heights + roof info
-│  ├─ roads.json                  graph nodes/edges + surfaces
-│  ├─ features.bin / .json        walls, stairs, kerbs, pools …
-│  └─ props.bin                   instanced positions by type
-├─ tools/
-│  ├─ vallromanes/
-│  │  ├─ frame.mjs                origin, transforms
-│  │  ├─ read-bue.mjs             SHP reader + CAS filtering + ALTITUD parsing
-│  │  ├─ inventory.mjs            prints/validates counts per CAS
-│  │  ├─ fetch-catastro.sh        ATOM → ZIP for 08297
-│  │  ├─ fetch-icgc-dtm.sh        DTM tiles covering the bbox
-│  │  ├─ fetch-osm.sh             Overpass query for bbox (reuse upstream overpass.sh)
-│  │  ├─ build-terrain.mjs
-│  │  ├─ build-buildings.mjs
-│  │  ├─ build-roads.mjs
-│  │  ├─ build-features.mjs
-│  │  ├─ build-props.mjs
-│  │  ├─ build-labels.mjs
-│  │  └─ build-geodata.mjs        runs all stages, writes data/ + manifest
-│  └─ data/vallromanes/
-│     ├─ raw/                     NOT committed (.gitignore): BUE SHP, Catastro, DTM, OSM
-│     └─ overrides/               committed: manual fixes (oneway, widths, names, heights)
-└─ tests/                         node tests for pipeline + runtime samplers
+│  ├─ main.js            starts js/town.js
+│  ├─ town.js            the orchestrator: loads data, builds the world, wires systems, HUD, saved state, animation loop
+│  ├─ town-map.js        minimap and atlas (canvas): hillshade, buildings, streets, labels, search, teleport
+│  ├─ town-config.js     keyboard helper
+│  ├─ controllers.js     person, car, bicycle, helicopter; collisions; world interface (setWorld)
+│  ├─ cameras.js         chase / action / pov, four scenic cameras, drone
+│  ├─ lighting.js        four time presets, sun from js/geo/sun.js, shadow cascades, sky
+│  ├─ post-processing.js the colour grade applied to the scene pass
+│  ├─ tsl-materials.js   shared TSL materials and the cityUniforms (sun colour, interior glow, wetness)
+│  ├─ traffic-sim.js     car driving on the lane graph (no rendering, runs under Node)
+│  ├─ traffic.js         draws cars (instanced), people (PersonCrowd), headlights; car colliders
+│  ├─ walkers-sim.js     people on the pavement graph (no rendering)
+│  ├─ audio.js           the sound orchestrator; audio-synthesis.js, audio-events.js, audio-acoustics.js: kept upstream synthesis
+│  ├─ actor-models.js, pedestrians.js, vehicle-lights.js, trees.js: kept upstream models (cars, people, lamps, trees)
+│  ├─ scene-culling.js, touch-controls.js, gamepad-controls.js, pedestrian-routes.js: kept upstream, not all used
+│  ├─ geo/               pure data access (load-geodata, terrain-sampler, polygon, road-index, stair-index, lane-graph,
+│  │                      pavement-graph, sun, map-math)
+│  └─ world/             builders: terrain, buildings (+building-geometry), streets (+street-geometry), features
+│                         (+feature-geometry), props, woodland, trunks, signs (+sign-geometry)
+├─ data/                 GENERATED and committed (about 5.4 MB gzipped): see §6
+├─ tools/vallromanes/    the pipeline: build-*.mjs, fetch-*.mjs, read-bue, catastro, lidar-roofs, utm, osm-match, ...
+├─ tools/data/vallromanes/
+│  ├─ raw/               NOT committed: BUE shapefiles, ICGC DTM/DSM windows, boundary, OSM, Catastro GML
+│  └─ overrides/         committed: roads.json (manual street fixes), shops.json (the shop directory with places)
+├─ tests/                34 files, 244 node:test tests (pipeline, runtime geometry, simulations)
+└─ CLAUDE.md spec.md plan.md knowledge.md report.md README.md
 ```
 
-Upstream NYC modules (`city-grid`, `boroughs`, `landmarks`, `buildings`, `road-network`, `nyc-map`,
-`nyc-geodata`, `city-config`) are deleted once their replacements work. Shared helpers worth keeping
-(e.g. `batchStaticGroupMeshes`) move to `js/util/`.
+The upstream New York modules (`city-grid`, `boroughs`, `landmarks`, `road-network`, `nyc-map`, `nyc-geodata`, `city-config`) are gone.
+`npm run geodata` bakes everything; `npm test` runs the tests; `npx serve .` (or `python3 -m http.server`) serves the site.
 
-## 4. Inputs and their roles
+## 4. Data sources and their roles
 
-| Input | Raw path | Used for |
+| Source | Where it enters | Gives |
 |---|---|---|
-| BUE SHP (`l`, `p`, `s`, `t`) | `raw/bue/BUE1M08296*.shp` | Primary geometry for everything |
-| ICGC DTM 0.5 m | `raw/icgc/dtm/*.tif` | Terrain grid (primary); building base heights |
-| ICGC LiDAR (optional) | `raw/icgc/lidar/*.laz` | Roof shapes and heights (later phase) |
-| Catastro BU GML (08297) | `raw/catastro/*.gml` | `numberOfFloorsAboveGround` per BuildingPart; use; year |
-| OSM extract | `raw/osm/vallromanes.json` | oneway, lanes, maxspeed, highway class, POIs |
-| POUM zoning | `overrides/zoning.geojson` (hand-digitised or official) | Facade and material style per zone |
-| Municipal boundary (INE 08296) | `raw/boundary/*.geojson` | Playable extent, terrain clip, map frame. Source to be chosen (ICGC administrative divisions, Cadastre or Diputació) |
-| Overrides | `overrides/*.json` | Manual corrections keyed by stable ids |
+| Diputació de Barcelona, BUE 1:1000 (SHP `l p s t`) | `read-bue.mjs` → every `build-*` stage | All urban geometry and names: 4 313 structures, 624 street edges, 11 243 stair lines, ~190 km of walls, retaining walls, hedges and fences, 16 032 props, 846 house numbers, 178 places |
+| ICGC DTM, LiDAR 2021–2023, 1 m window (COG, HTTP range reads) | `build-terrain.mjs`, `build-buildings.mjs` | The ground everywhere; building base heights; validation of the BUE spot heights |
+| ICGC DSM, same flight, 1 m | `lidar-roofs.mjs`, `build-canopy.mjs` | Roof level, roof shape and the church tower; vegetation height (the woods) |
+| ICGC Divisions administratives v2r2 | `build-boundary.mjs` | The municipal polygon: hard edge, terrain clip, map frame |
+| OpenStreetMap (Overpass, ODbL) | `fetch-osm.mjs`, `osm-match.mjs`, `fetch-osm-pois.mjs` | One-way, lanes, speed limits and some street names; named shops and restaurants with coordinates |
+| Catastro INSPIRE Buildings 08297 (CC BY 4.0) | `catastro.mjs` | Real floors above ground, use and year of construction |
+| Council business directory (image) + Google Maps markers | `overrides/shops.json`, `build-shops.mjs` | The 19 shop signs: names, sectors, positions |
+| Photographs on Wikimedia Commons and the council site | `LANDMARKS` in `build-buildings.mjs`, `js/world/buildings.js` | The look of five landmarks (reference only, not copied) |
+| Upstream slop-newyork | `js/` | The rendering engine, lighting, cameras, controllers, models, audio synthesis |
 
-**Stable ids:** each output feature gets an id equal to a hash of its CAS plus its rounded geometry, so
-overrides survive re-runs.
+Stable ids: a structure's id is an FNV-1a hash of its CAS and its centimetre-rounded ring, so overrides survive re-runs.
 
-## 5. Pipeline stages
+## 5. Pipeline stages (as built)
 
-All stages are Node ≥ 20 ESM. They are deterministic, log an inventory, and throw on validation failure.
+All stages are Node ESM, deterministic, print an inventory, and throw on NaN, empty output or out-of-bounds results.
+`build-geodata.mjs` runs them in this order and writes `data/manifest.json` (frame, counts, byte sizes and SHA-256 of every file, credits):
+boundary → roads → stairs → terrain → buildings → features → props → canopy → labels → shops.
 
-### 5.1 read-bue
-- Read with the npm package `shapefile` (Mike Bostock; streams Z values), or a small custom reader.
-- Normalise each feature to `{ cas, desc, kind: 'line'|'poly'|'point'|'text', coords: [[x,y,z]…], angle?,
-  altitud?, text? }` in the local frame.
-- Parse `ALTITUD` by replacing `,` with `.` and converting to a number.
-- Strip `_C` suffixes into a flag `fieldRevised: true`. Keep `LS/LN/ES` as `ltp` or `elevated` flags.
+### 5.1 read-bue (`read-bue.mjs`)
+A custom SHP/DBF reader (the `shapefile` package drops Z). Every feature becomes `{ cas, desc, kind: line|poly|point|text, coords [[x,y,z]], angle, altitud, text }`
+in the local frame. `ALTITUD` is a string with a decimal comma. The suffix `_C` marks field revision.
 
-### 5.2 build-terrain
-- **Primary:** mosaic and clip the ICGC DTM to the **municipal boundary bbox plus a 200 m margin** (`geotiff`
-  npm package). Two resolution tiers: the BUE core at 1–2 m, the rest of the municipality at 4–8 m (the
-  coarse 8 m grid below doubles as the far tier).
-- **Fallback/validation:** build a constrained TIN from contours (`ORO_01/02`), spot heights (`ORO_03/04`) and
-  breaklines (`MED_06*`, `MED_05*`, LTP elements). Report RMS and max difference against the DTM.
-- Output grid: **1 m** in the core urban area or **2 m** everywhere (decide in phase 2 based on size).
-  - Encoding: heights quantised to 5 cm above `H0` (`y = q * 0.05`, max error 2.5 cm), stored as int16 residuals of
-    a planar predictor (`q - (left + up - upLeft)`) so gzip reaches about 3 MB for both tiers. Plain 1 cm uint16 was
-    7.4 MB gzipped. Two tiers: 2 m over the BUE bbox + 100 m, 4 m over the whole download window.
-    The server must send `terrain.bin` gzip-compressed, otherwise it is 8.4 MB.
-  - Size check: 4.3 × 3.1 km at 2 m is 3.3 M samples, about 6.7 MB raw and about 3 MB gzipped.
-- Burn road surfaces into the grid. Within the road polygons, flatten the cross-slope to the centreline
-  height profile, so vehicles don't tilt on terrain noise.
-- Also output a coarse 8 m grid for far LOD and the minimap hillshade.
+### 5.2 boundary
+The Vallromanes polygon (CODIMUNI 082969) from the ICGC GeoJSON, 1 104 vertices, 10.570 km², converted to the local frame
+(`data/boundary.json`, 17 kB). Used for the hard edge, clipping, the terrain window and the map.
 
-### 5.3 build-buildings
-- Sources: `CON_01pol_PL` (buildings), plus shed, porch, canopy, greenhouse, ruins, covered tank and
-  construction polygons as separate `kind`s.
-- `top = polygon Z`; this is the **mean roof level** (validated against LiDAR, knowledge.md §3.5), not the eave or
-  ridge. For pitched roofs set the eave about 0.85 m below `top` and take the ridge from `CON_29` or the LiDAR DSM.
-  `base = min(DTM sampled at the footprint vertices and centroid)`. Also store
-  `baseMax` so the plinth can be extruded down to the lowest ground on slopes.
-- `height = top − base`, clamped to ≥ 2.2 m. Flag outliers above 30 m or below 2 m for review.
-- `floors`: from Catastro, joining by largest-area overlap with BuildingParts. Otherwise use
-  `round(height / 3.0)`.
-- Roofs:
-  - Phase 3 (done): hip roof when the footprint fills at least 80 % of its minimum oriented rectangle (no courtyard, at most
-    16 vertices, at least 3 m wide), otherwise flat. The ridge runs along the long axis with 45° hips; the rise is
-    0.35 × the half width (0.6–2.2 m), the eave 55 % of it below `top` and the ridge 45 % above.
-  - Phase 8: use `CON_29_LN` ridge lines plus `CON_29_PT` slope arrows (`ANGLE`) to build gable/hip roofs.
-    Optionally fit roof planes to the LiDAR points.
-- Facade style comes from the POUM zone and the floor count. For example, the village core gets stuccoed
-  masonry; detached-house zones get render with tile roofs.
-- Geometry cleanup: remove duplicate vertices, enforce CCW orientation, simplify to 0.1 m.
-- Output: rings (Int32, centimetres) + base/top/floors/kind/zone/roofIndex.
+### 5.3 roads
+Centrelines `COM_18/19/23/24` become a graph: endpoints snapped within 0.75 m, split at T-junctions, degree-2 chains merged, spurs under 3 m
+removed (555 lines → 624 edges, 599 nodes). Width from perpendicular rays to the kerb lines (`COM_17`, `COM_03`, `COM_02`), median per side
+(`halfL/halfR`, pavement `swL/swR`). Names from the street labels (direction within 30°, propagated along straight chains; 84 % of urban
+edges), then OSM. OSM attributes (`oneway`, `lanes`, `speed`, `osm` class) come from `osm-match.mjs`: an edge takes the way that stays within
+8 m of at least 80 % of it (392 of 624 edges matched). `overrides/roads.json` holds manual fixes. Each edge carries a smoothed 3D profile `pts [x, z, y]`
+whose Z agrees with the DTM within 0.2 m. Output `data/roads.json`.
 
-### 5.4 build-roads
-- Centrelines: `COM_18_LN` (urban paved), `COM_19_LN` (urban unpaved), `COM_23_LN` (other paved roads),
-  `COM_24_LN` (tracks, for the walk/bike network only).
-- **Graph construction:**
-  - Snap endpoints within 0.75 m.
-  - Split at intersections and T-junctions.
-  - Merge degree-2 chains.
-  - Remove dangles under 3 m.
-  - Report connected components.
-- **Width:** cast rays perpendicular to the centreline every 5 m to the nearest kerb (`COM_17*`) or edge
-  (`COM_03*`, `COM_02*`) on each side. Take the median per edge. Fallback by class: urban 6 m, road 7 m,
-  track 3.5 m.
-- **Names:** for each `TOP_05*` text, find the nearest edge within 25 m whose direction is within 30° of the
-  text `ANGLE` (mod 180°). Propagate along same-name chains.
-- **Traffic attributes:** match to OSM ways by Hausdorff distance under 8 m. Copy `oneway`, `lanes` and
-  `maxspeed`. Defaults: two-way, one lane each way, 30 km/h urban.
-- **Surfaces:** built at runtime as ribbons along each edge from `halfL/halfR` (the median kerb distance per side) and
-  `swL/swR` (kerb to the first pavement limit, block outline or facade, 0.8 to 3 m, 1.5 m by default), at the smooth
-  profile height. The terrain under a corridor is baked to the profile minus `ROAD_DEPTH` (10 cm) so it never pokes
-  through; the asphalt rides 4 cm above the profile, pavements 14 cm above that. Pavements and the centre line stop
-  at junctions (the other roads' half width + 0.4 m).
-- Output: `nodes[] {id, x, y, z}`, `edges[] {id, a, b, polyline, width, class, name, oneway, lanes,
-  speed}`, plus surface polygons.
+### 5.4 stairs
+`CON_23` lines are single steps: 11 243 lines group (`stairs-group.mjs`) into 1 411 flights of two or more steps with tread heights, and 1 994 lone lines.
+Output `data/stairs.json`; walls are cut around flights.
 
-### 5.5 build-features
-- Walls: `CON_15*`, `CON_16`, garden walls. Default height 1.8 m. **Retaining walls** `CON_14*`: height from
-  the terrain difference across the line (sampled ±1 m either side).
-- Fences, railings and wire fences: thin geometry or alpha-tested, 1.1–1.5 m.
-- Stairs `CON_23*`: lines are individual step edges. Group nearby parallel lines into flights and build step
-  geometry between consecutive lines using their Z.
-- Pools `HID_11EX/IN`: pair outer and inner rings to form the coping and water surface.
-- Streams `HID_03`, ponds `HID_09/10`, bridges `COM_13ES`, crash barriers `COM_16`.
-- Vegetation areas: gardens `VEG_06`, woodland `VEG_02`, hedges `VEG_04` (extruded hedge geometry),
-  flowerbeds `VEG_07`.
+### 5.5 terrain
+The 1 m DTM window (5 534 × 3 748 px) is box-averaged into two tiers: **2 m** over the BUE area and **4 m** over the whole window (`terrainBounds`
+−2569…2963 × −1497…2251). Heights are quantised to 5 cm over `H0` and stored as int16 residuals of a planar predictor
+(`q − (left + up − upLeft)`): `terrain.bin` is 8.4 MB raw and 3.05 MB gzipped (the server must gzip it). The road and stair corridors are **burned in**
+(`burn-roads.mjs`): the terrain under a street is the street's profile minus `ROAD_DEPTH` 0.1 m, so it never pokes through the asphalt.
+Validation gate: DTM against BUE spot heights, median |Δ| 0.14 m, P95 0.70 m (gate 0.3 / 1.0).
 
-### 5.6 build-props
-- Instanced point sets with optional angle:
-  - trees `VEG_03_PT` (species chosen by zone and random seed, reusing `trees.js`)
-  - lamps `ENE_06_PT*` (reuse the street-lamp actors)
-  - poles `ENE_05_PT*`, pylons `ENE_04_PT*`
-  - manholes `REG_01_PT*`, gullies `HID_14_PT*`, tree pits `VEG_10_PT*`, fountains `HID_15_PT*`
-- Y comes from the DTM, not the point's Z. The point Z is kept for validation.
+### 5.6 buildings
+`CON_*pol_PL` polygons give 12 kinds (building, shed, porch, canopy, construction, tank, ruins, greenhouse, work in progress, monument, cemetery, tower);
+`open` kinds are roof slabs without walls. Rings are simplified to 0.1 m, oriented (outer positive area, holes negative), stored as Int32 centimetres.
+- **Heights.** `base` and `baseMax` are the lowest and highest ground at the footprint vertices and centroid; `top` is the polygon Z, the **mean roof level**
+  (validated against the LiDAR: BUE top minus LiDAR median roof +0.37 m). Flags TALL / SHORT / BURIED / LOW_TOP mark outliers; `LIDAR_TOP` marks a corrected one.
+- **LiDAR correction** (`lidar-roofs.mjs`, `refineWithLidar`): pixels well inside the walls (0.6 m inset) give roof level (median), eave (10th percentile) and ridge
+  (95th). A top buried in the ground or more than 1.2 m from the roof level takes the roof level (413 buildings, median +0.69 m): flagged buildings fall from
+  4.3 % to **0.55 %** (gate 1 %). A hip roof with under 0.9 m of relief is made flat (446 of 1 566). For the rest, the height at the ridge ends decides
+  hip, **gable along the long axis** or **gable along the short axis** (`roofShape`, 209 gables).
+- **Roofs.** Types FLAT 0, HIP 1, GABLE 2, GABLE_SHORT 3, with `rise` (eave to ridge). The eave sits 55 % of `rise` below `top`, the ridge 45 % above.
+- **Catastro join** (`catastro.mjs`): the GML is read with patterns. Parts are matched to footprints by centroid; the footprint takes the most floors above
+  ground of its parts and the use and year of their building. 1 948 structures joined, floors changed in 841. Fields `floors`, `cat`, `use` (0 unknown … 6 other), `year`.
+- **Landmarks** (`LANDMARKS`, `LOOK`): five footprints get a `look` (1 town hall, 2 school, 3 masia, 4 church nave, 5 nursery); the church also gets `tower [x, z, size, top]`
+  from the LiDAR spike beside its nave, the masia a `chimney`, the town hall a shallow tile roof override.
+- Output `data/buildings.json` (610 kB; records with kind, base, baseMax, top, floors, roof, rise, flags, look, tower, use, year, ring offsets) and `buildings.bin` (rings).
 
-### 5.7 build-labels
-- Street names (per graph edge chain), house numbers (`TOP_07*`, attached to the nearest building), and
-  building/farmhouse names (`TOP_06*`).
-- Facilities (`TOP_09EQ*`) become **teleport locations**, replacing NYC `TELEPORT_LOCATIONS`.
+### 5.7 features and props
+`build-features.mjs`: walls (`CON_15`, Z is the top), retaining walls (`CON_14`, Z is the crest: base from the lower ground 1.5 m either side), hedges, fences, railings, wire fences,
+streams, ditches, bridges, and swimming pools and ponds (outlines joined within 0.3 m: 465 pools, 58 ponds). `build-props.mjs`: trees (11 852 survey points), lamps, poles, pylons, manholes,
+gullies, tree pits and fountains as x, z, angle triples (`props.bin`, 192 kB); heights come from the terrain at runtime.
 
-### 5.8 build-geodata
-- Runs all stages, writes `data/*` and a `manifest.json`. The manifest contains: frame constants, bbox,
-  counts per layer, source file hashes, the pipeline git hash, and attribution strings.
+### 5.8 canopy (`build-canopy.mjs`)
+DSM − DTM with the building footprints removed, averaged into **4 m cells**, 0.5 m steps (uint8): `canopy.bin` 1.1 MB raw, 0.67 MB gzipped. Measured over the municipality:
+10.6 % under 0.5 m, 9.7 % 0.5–2 m, 12.8 % 2–5 m, 27.8 % 5–10 m, 36.9 % 10–20 m, 2.3 % above 20 m: **two thirds is woodland**.
 
-## 6. Runtime changes
+### 5.9 labels and shops
+`build-labels.mjs`: 104 street names (with angle and length for the map), 846 house numbers (attached to buildings), 178 places, 29 teleports. `build-shops.mjs`: for each entry of
+`overrides/shops.json` resolve a point (a survey place, degrees, or street + house number; a missing number is estimated between its neighbours on the same side), find the building (containing, else nearest within
+20 m), pick the wall facing the street, put the sign 3.1 m above the pavement, centred on the anchor and spread when several share a wall → `data/shops.json` (19 signs).
 
-| Area | Upstream | Vallromanes |
+## 6. Runtime data files
+
+| File | Content | gzip |
 |---|---|---|
-| Data loading | `import { GEO } from './nyc-geodata.js'` | `await loadGeodata()` fetches `data/manifest.json` and the binaries before the builders run |
-| Ground | Flat, plus special cases | `terrain-sampler.heightAt(x,z)` everywhere (controllers, traffic, peds, props, camera collision) |
-| Terrain mesh | None | Chunks (e.g. 256 m) with 2–3 LODs, skirts, TSL material (grass/soil/rock by slope and height, darkened under trees) |
-| Buildings | Procedural per lot | Real extrusions. Merged per chunk; facade TSL materials driven by attributes; windows procedural in the shader |
-| Colliders | AABB `pushCollider` | Polygon footprints + wall segments in a uniform grid (10 m cells). Circle-vs-segment resolution for person and bike; OBB-vs-segment for the car |
-| Road network | Manhattan grid model | `road-graph.js`: general directed lane graph from `roads.json`. Intersections as priority/yield nodes (few or no signals) |
-| Traffic | Grid-based lanes, signals | Same car-following model (IDM-like `follow`/`brake`) on graph lanes. Lower density; speed limited by curvature and slope |
-| Pedestrians | Sidewalk tracks, crosswalks | Pavement graph derived from the pavement polygons; crossing points at intersections |
-| Helicopter | City-scale | Keep; ceiling about 600 m above `H0` |
-| Map UI | `nyc-map.js` | `town-map.js` (done): hillshade + buildings + roads + labels, search, teleport |
-| Lighting | Presets | Keep presets. Set the sun azimuth/latitude for 41.5°N |
-| Audio | City ambience | Keep the engine; reduce traffic hum, add birds/wind (optional) |
-| Culling | `scene-culling.js` | Keep, and feed it the new chunked meshes |
-| three.js | `@dev` | Pin an exact version |
+| terrain.bin/json | two height tiers, int16 residuals | 3.05 MB |
+| features.bin/json | wall, fence, hedge, retaining lines; water | 0.86 + 0.16 MB |
+| canopy.bin/json | vegetation height grid | 0.67 MB |
+| props.bin/json | tree, lamp, pole, manhole … positions | 0.13 MB |
+| buildings.json/bin | structures and rings | 0.10 + 0.12 MB |
+| stairs.json, roads.json, labels.json, boundary.json, shops.json, manifest.json | | 0.30 MB |
+| **Total data** | | **5.4 MB** (code 0.19 MB, three.js 0.76 MB from jsDelivr) |
 
-`GEO` runtime shape (in-memory, after loading):
+## 7. Runtime systems
 
-```js
-GEO = {
-  version: 2, frame: { E0, N0, H0, crs: 'EPSG:25831' }, bbox: { minX, minZ, maxX, maxZ },
-  terrain: { width, height, cell, originX, originZ, heights: Float32Array },
-  buildings: [{ id, kind, ring: Float32Array /*x,z pairs*/, base, baseMax, top, floors, zone, roof }],
-  roads: { nodes, edges }, surfaces: { carriageway: [], pavement: [] },
-  features: { walls: [], retaining: [], fences: [], stairs: [], pools: [], water: [], hedges: [] },
-  props: { tree: Float32Array, lamp: Float32Array, pole: Float32Array, /* x,z,angle triples */ },
-  labels: { streets: [], places: [], numbers: [], teleports: [] }
-}
-```
+**Loading** (`js/town.js`): nine data files are fetched in parallel (a determinate loading bar fills as each arrives), then the terrain, buildings, streets, features, props, woods, signs, traffic
+and walkers are built, shaders are compiled (`compileAsync` against the scene pass's MRT layout), and the overlay hides after two frames. State (position, mode, time) is saved to localStorage every 5 s.
 
-## 7. Libraries
+**World interface** (`controllers.setWorld`): `groundHeight(x, z, mode)` (terrain, plus `ROAD_DEPTH + LIFT` on streets, plus `CURB` on pavements for people, plus the stair tread height),
+`normalAt`, `bounds`, and `confine(x, z)` (keeps everything 3 m inside the boundary). Vehicles tilt to the slope.
 
-- **Pipeline (Node, devDependencies):**
-  - `shapefile`: SHP/DBF reading
-  - `geotiff`: DTM reading
-  - `fast-xml-parser`: Catastro GML
-  - `cdt2d` or `poly2tri`: constrained triangulation
-  - `earcut`: polygon triangulation
-  - `rbush`: spatial index
-  - `@turf/*` (selected modules): geometry operations
-  - `laz-perf` / `copc` (optional): LiDAR
-- **Runtime:** none beyond three.js. Earcut comes via `THREE.ShapeUtils` if needed.
-- No GDAL dependency, to keep the pipeline portable. The DGN v8 files are not used.
+**Terrain** (`world/terrain.js`): 256 m chunks, three levels (vertex spacing 2 / 8 / 32 m, switched at 380 m and 1.4 km with hysteresis), skirts, one TSL ground material from
+the world position and the normal (grass, dry grass, soil, rock by slope and height). Under woodland the canopy grid (an R8 texture) darkens the ground to forest floor and tints scrub and crops.
 
-## 8. Quality gates
+**Buildings** (`world/buildings.js`, `building-geometry.js`): merged per 256 m chunk (82 chunks), plinths below the lowest ground, walls with a window-row count from the Catastro floors (else from the height),
+flat roofs (gravel), hip and gable roofs (tile courses along the contours, sheet metal for farm and industry), vertical gable ends, porches and canopies as slabs, ruins as low walls, bell tower and chimney.
+One facade material reads per-vertex `info = (rows, surface, colour seed, kind + style/32)`: plaster palette, window grid (bays 3.4 m, 2.7 m for pre-1950 houses), plinth stone, era tint (pre-1950 warmer, 1990+ whiter),
+use (plain concrete for farm and industry, light for shops and public), and the landmark looks (brick and pink stone, yellow and grey metal, rubble stone, whitewash, pale blue, ashlar). At night some windows are lit.
 
-- **Inventory:** counts per CAS match `knowledge.md` §3.3 within the expected values.
-- **Terrain:** DTM vs BUE spot heights. Median |Δ| < 0.3 m, P95 < 1 m (excluding points on buildings or walls).
-- **Buildings:** 100% have finite base/top. Height distribution roughly P50 ≈ 7 m. Fewer than 1% flagged.
-- **Roads:** one main connected component containing at least 95% of the urban edge length. Every urban edge
-  has a width. At least 90% of urban edges are named.
-- **Runtime:** 60 fps on a mid-range GPU at street level. First load under 10 MB gzipped (excluding
-  three.js). No NaN positions (asserted in dev mode).
-- **Tests:**
-  - Pipeline unit tests with tiny fixture shapefiles.
-  - Runtime tests for `heightAt`, collisions and graph routing (upstream `tests/helpers/module.cjs` style).
+**Streets** (`world/streets.js`, `street-geometry.js`): ribbons along each edge from `halfL/halfR` and the smooth profile, kerbs, pavements (stopping 0.4 m beyond the half-width of the widest street at a junction),
+centre lines, junction discs. **Features** (`world/features.js`): walls, hedges, fences, stairs (steps from the tread heights), water, bridges; wall colliders. **Props** (`world/props.js`): instanced lamps (night light pool),
+poles, manholes, gullies, tree pits, fountains; trees through the upstream tree field with levels of detail.
 
-## 9. Attribution and licensing
+**Woodland** (`world/woodland.js`): a tree site in about 30 % of the 4 m cells whose vegetation exceeds 4.5 m, not on a street and not in a cell with a surveyed tree, sized by the canopy height:
+131 993 trees through the same tree field, hidden beyond 520 m, so about 10 000 are drawn. Only the full-detail level casts shadows (the other levels cost 30 % of the triangles for shadows nobody sees).
+**Trunks** (`world/trunks.js`): a 16 m grid of the trunk positions hands out pooled circle colliders near a point; no collider object per tree.
 
-- **README credits:**
-  - "Cartografia topogràfica urbana 1:1000 © Diputació de Barcelona" (exact wording per their terms)
-  - "© Institut Cartogràfic i Geològic de Catalunya (ICGC), CC BY 4.0"
-  - "© Dirección General del Catastro, CC BY 4.0"
-  - "© OpenStreetMap contributors, ODbL"
-- Code: MIT (as upstream). Generated `data/` carries the source licences; check the Diputació terms before
-  publishing.
+**Signs** (`world/sign-geometry.js`, `signs.js`): one mesh, one draw call; a canvas text atlas (512 × 64 cells), colours by sector, emissive at dusk.
+
+**Traffic** (`traffic-sim.js`, `geo/lane-graph.js`): a right-hand lane per direction from `roads.json` (652 lanes, 70 km), offset by half the carriageway, connected at nodes with turn weights by angle and street rank.
+Junctions within 40 m of each other, and bends within 30 m of one, share a **gate**: one car at a time holds a gate, higher-ranked streets first, waiting cars get their turn after 15 s, the lane beyond must have room,
+and nothing enters while a walker is on a crossing of the gate. Cars follow the Intelligent Driver Model (a 1.6 m/s², b 2.6, T 1.3 s, s0 2 m), slow for bends (v = √(aLat/curvature), 2.6 m/s²), the coming turn and slopes,
+and steer by pure pursuit on a bicycle model (corners are rounded). A pool of 60 cars lives around the camera (one per 110 m of lane within 380 m, spawned out of sight, removed beyond 450 m); stuck cars are removed after 90 s.
+Drawing (`traffic.js`): instanced sedan and SUV bodies (near and far level), spinning wheels, brake and turn lamps, contact shadows, 32 headlight spots at dusk. No buses (the data has no route).
+
+**People** (`walkers-sim.js`, `geo/pavement-graph.js`): a link per pavement side between the trimmed street ends, short corner links, crossing links at junctions of three or more streets. 80 walkers around the camera
+walk, turn corners, pause, and cross only when no car holds or is about to enter the gate; body position and heading are eased (2.6 m/s, 5 rad/s) so nothing jumps or spins. Skinned `PersonRig`s with planted feet.
+
+**Controllers** (`controllers.js`): person (walk 4.4 m/s, run 8.2), car (23.5 m/s, boost 36), bicycle, helicopter; static colliders (building outlines, wall and prop circles) bucketed in 48 m cells, plus
+`dynamicColliders` (woodland trunks and traffic cars) asked per frame; crashes slow the vehicle and fire a collision event.
+
+**Cameras and light.** Chase, action and first person, four scenic cameras and a drone; four time presets (golden 18:45, midday 13:45, blue hour 20:10, night) from `geo/sun.js` (41.54° N, 2.3° E, 15 September, CEST).
+
+**Map and HUD** (`town-map.js`, `geo/map-math.js`): hillshaded elevation, buildings, streets, names, search with accents ignored, teleport list by category, speed, altitude, place and street plates, mode and time buttons.
+
+**Sound** (`audio.js`): Web Audio, started on the first gesture, `N` mutes (remembered). The player's engine (car, bicycle, helicopter) or footsteps, wind (speed, height, shelter by `CityAcoustics`), the four nearest traffic
+engines (distance, stereo, Doppler, buildings in the way), crashes. About 0.2 s to build the sounds. Not tuned by ear yet.
+
+## 8. Rendering and performance
+
+- Render path: `pass(scene)` with the upstream MRT layout, colour grade, `WebGPURenderer` with `ClusteredLighting(256, 32, 28, 48)` and a reversed depth buffer; three shadow cascades.
+- **three.js is pinned to the dev commit `fae8734` (r187dev)**: release 0.186.1 fails in Safari (private address space of the shaders over 8 192 bytes); that commit works.
+- Budget: a village frame is about 3.0 M triangles over all passes (3.4 M in the thick of the woods), 120 fps on the development Mac, no GPU errors. First load 6.4 MB gzipped; ready in 1.3 s locally.
+- Loading never blocks on a zero-size canvas: the loop skips frames when the window has no size.
+- Switches: `?notraffic`, `?nowoods`, `?notrees`, `?lite` (smaller clustered-lighting grid).
+
+## 9. Quality gates and results
+
+| Gate | Target | Result |
+|---|---|---|
+| Terrain vs BUE spot heights | median < 0.3 m, P95 < 1 m | 0.14 m, 0.70 m |
+| Buildings flagged for review | < 1 % | 0.55 % (16 of 2 906), after the LiDAR correction |
+| Urban edges named | ≥ 90 % | 89 % (93 % of the length) |
+| Largest road component | ≥ 95 % of urban length | 98.3 % |
+| First load | < 10 MB gzipped | 6.4 MB |
+| Frame rate | 60 fps | 120 fps (Chrome, M-series); Safari 60 fps |
+| Traffic: cars stuck 90 s | none in a long run | ≤ 3 per 30 simulated minutes at three places |
+| Walkers: step per 0.1 s / turn per 0.1 s | no jumps | 0.26 m / 0.5 rad |
+
+## 10. Tests
+
+244 `node:test` tests in 34 files: the pipeline stages with tiny fixtures (read, boundary, roads, OSM matching, stairs, terrain, buildings, canopy, LiDAR roofs, Catastro, features, props, labels, shops),
+the runtime geometry (terrain mesh, building and street geometry, gable roofs, towers, signs), the samplers and indexes, the lane and pavement graphs, a 30-minute no-deadlock run of traffic at three places,
+the walkers' step and turn limits, collisions of trunks, and the page's import graph against the preload list. `tests/helpers/module.cjs` runs upstream CommonJS-style modules under a `vm` with import stubs.
+
+## 11. Known limits and open items
+
+- **Outside the BUE (54 % of the municipality) there are no buildings**, and streets and tracks exist only where the survey drew them; 357 of the Catastro's 3 636 building parts do not fall inside a BUE structure and are not modelled; Catastro footprints are the obvious next source.
+- Woodland uses the three upstream species (plane, locust, elm) for pines and oaks.
+- Traffic cars are not pushed when hit; walkers do not avoid the player or each other; no buses.
+- The sound has not been tuned by ear; no birds, bells or horns in the game.
+- Landmarks beyond the five are generic buildings; the CAP, the Casal and most masies have no reference photos.
+- Safari and Chrome were tested by hand on the final build; there are no automated browser tests.
+
+## 12. Attribution and licensing
+
+- Cartografia topogràfica urbana 1:1000 © Diputació de Barcelona (its terms allow publishing the derived data, with this credit);
+  © Institut Cartogràfic i Geològic de Catalunya, CC BY 4.0; © Dirección General del Catastro, CC BY 4.0; © OpenStreetMap contributors, ODbL.
+- Code: MIT, as upstream. `data/` carries the source licences. The reference photographs of the landmarks are not part of the repository.
