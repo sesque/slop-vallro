@@ -211,8 +211,9 @@ index contour labels 331.
 
 ## 5. Open questions
 1. Survey or flight date of the BUE (ask the Diputació or check the metadata).
-2. Diputació licence and redistribution terms, especially whether derived data can be published on GitHub
-   Pages.
+2. ~~Diputació licence and redistribution terms, especially whether derived data can be published on GitHub
+   Pages.~~ **Answered (2026-10-25, by the project owner after reading the Diputació's terms): publishing is allowed.** Keep the
+   attribution line in README.md and the manifest; the exact licence wording is not copied into the repo yet.
 3. ~~Whether to model areas outside the BUE~~ **Decided: the whole municipality is the world.** Open: the source of
    the boundary polygon, and which lower-detail sources fill the area outside the BUE (ICGC DTM and RTT, Catastro
    footprints, OSM, LiDAR tree cover).

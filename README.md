@@ -29,7 +29,7 @@ npm test
 
 ## Data and credits
 
-- Urban topographic map 1:1000 (buildings, streets, walls, stairs, trees, lamps, labels): © Diputació de Barcelona, Cartografia topogràfica urbana 1:1000. Its terms apply to the data derived from it; redistribution of the baked data still has to be confirmed with the Diputació.
+- Urban topographic map 1:1000 (buildings, streets, walls, stairs, trees, lamps, labels): © Diputació de Barcelona, Cartografia topogràfica urbana 1:1000. Its terms allow publishing the data derived from it, with this credit.
 - LiDAR terrain and surface models, and the municipal boundary (Divisions administratives): © Institut Cartogràfic i Geològic de Catalunya (ICGC), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 - Road attributes (one-way, lanes, speed limits, some names): © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright) (ODbL).
 
