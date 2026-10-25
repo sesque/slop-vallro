@@ -159,7 +159,13 @@ facade detail yet); about 2.5 M triangles in a typical view at 90 to 120 fps in 
       Not done: gable and shed roofs, ridge direction from the LiDAR, `CON_29` ridge lines.
 - [ ] Facade and material styles by POUM zone (hand-digitised `overrides/zoning.geojson`, or the official
       georeferenced POUM).
-- [ ] Special buildings: a hand-modelled or parameterised church, Ajuntament, school and farmhouses ("Can …").
+- [x] Gable roofs from the LiDAR (`roofShape`): near-rectangular pitched roofs whose ridge ends keep the ridge height become gables (ridge along
+      the long or the short axis); the rest stay hips. 209 gables, 911 hips, 3 193 flat. Vertical gable ends in `building-geometry.js`.
+- [x] Landmark church, first step: Sant Vicenç (Plaça de l'Església, rebuilt 1908 by J. M. Pericas per the Diputació heritage record) gets a bell
+      tower taken from the LiDAR spike beside its nave (about 21 m, square shaft and pyramid roof). `LANDMARKS` in `build-buildings.mjs`.
+- [ ] Other special buildings: the Ajuntament (Plaça de l'Església 6), schools, CAP, Casal and the masies have no distinguishing data
+      (the survey's point for the Ajuntament, the origin, is a plaza, not the building), and I have not seen their facades. Needs photos
+      or a short description of each before modelling; the data cannot tell them from ordinary buildings.
 - [ ] Rest of the municipality outside the BUE (required, not optional): roads and tracks from RTT/OSM, buildings
       from Catastro footprints, forest and farmland from RTT/LiDAR with instanced woodland, at lower detail.
 

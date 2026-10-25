@@ -1,5 +1,5 @@
 import { ShapeUtils, Vector2 } from 'three';
-import { orientedBox } from '../geo/polygon.js';
+import { orientedBox, signedArea } from '../geo/polygon.js';
 
 // js/world/building-geometry.js
 // Turns baked structures (data/buildings.json + .bin) into flat-shaded triangle soup: walls (down to below the lowest
@@ -80,22 +80,55 @@ function pushCap(out, outer, holes, y, info, face) {
   }
 }
 
-// Hip roof over a nearly rectangular footprint: every footprint edge is joined to the ridge by the closest points of
-// the ridge segment, which gives the sloping faces and the hipped ends of a rectangle.
-function pushHipRoof(out, outer, eaveY, ridgeY, info) {
+// Pitched roof over a nearly rectangular footprint: every footprint edge is joined to the ridge by the closest points of the ridge
+// segment. `mode` 1 = hip (the ridge is shortened by the half width: 45 degree hips at both ends), 2 = gable along the long axis,
+// 3 = gable along the short axis (the ridge spans the whole box, so the end edges give vertical gable walls, drawn with `wallInfo`).
+function pushHipRoof(out, outer, eaveY, ridgeY, info, mode = 1, wallInfo = info) {
   const box = orientedBox(outer);
-  const half = Math.max(0, box.hx - box.hz); // ridge half-length: 45 degree hips at both ends
+  const across = mode === 3;
+  const ux = across ? -box.uz : box.ux, uz = across ? box.ux : box.uz;
+  const hx = across ? box.hz : box.hx, hz = across ? box.hx : box.hz;
+  const half = mode === 1 ? Math.max(0, hx - hz) : hx;
   const onRidge = (x, z) => {
-    const t = Math.max(-half, Math.min(half, (x - box.cx) * box.ux + (z - box.cz) * box.uz));
-    return [box.cx + box.ux * t, ridgeY, box.cz + box.uz * t];
+    const t = Math.max(-half, Math.min(half, (x - box.cx) * ux + (z - box.cz) * uz));
+    return [box.cx + ux * t, ridgeY, box.cz + uz * t];
   };
   const n = outer.length / 2;
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n;
     const a = [outer[i * 2], eaveY, outer[i * 2 + 1]], b = [outer[j * 2], eaveY, outer[j * 2 + 1]];
     const ra = onRidge(a[0], a[2]), rb = onRidge(b[0], b[2]);
+    if (mode > 1 && Math.hypot(ra[0] - rb[0], ra[2] - rb[2]) < 1e-4) {
+      // an edge whose ends meet the same ridge point is a gable end when it lies across the ridge: a vertical triangle
+      const edge = Math.hypot(b[0] - a[0], b[2] - a[2]);
+      const along = Math.abs(((b[0] - a[0]) * ux + (b[2] - a[2]) * uz) / (edge || 1));
+      if (along < 0.5) { pushTriangle(out, b, a, rb, wallInfo, 0); continue; }
+    }
     pushTriangle(out, a, b, rb, info, 1);
     if (Math.hypot(ra[0] - rb[0], ra[2] - rb[2]) > 1e-4) pushTriangle(out, a, rb, ra, info, 1);
+  }
+}
+
+export const SPIRE_HEIGHT = 4; // m of the pyramid roof on a bell tower
+
+/**
+ * A bell tower standing beside or inside a building: a square shaft with a pyramid roof. `tower` = [x, z, size, top] (the top of the
+ * spire as local y), `axis` = the unit direction of the building's long axis (the tower is aligned to it), `y0` = where the walls start.
+ */
+function pushTower(out, tower, axis, y0, wallInfo, roofInfo) {
+  const [cx, cz, size, top] = tower;
+  const h = size / 2, [ux, uz] = axis, vx = -uz, vz = ux;
+  const corner = (a, b) => [cx + ux * a + vx * b, cz + uz * a + vz * b];
+  const ring = [corner(-h, -h), corner(h, -h), corner(h, h), corner(-h, h)];
+  let flat = ring.flatMap((p) => p);
+  if (signedArea(flat) < 0) flat = ring.slice().reverse().flatMap((p) => p); // outer rings have positive area
+  const eave = top - SPIRE_HEIGHT;
+  pushWalls(out, flat, y0, eave, y0, wallInfo);
+  const apex = [cx, top, cz];
+  const n = flat.length / 2;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    pushTriangle(out, [flat[i * 2], eave, flat[i * 2 + 1]], [flat[j * 2], eave, flat[j * 2 + 1]], apex, roofInfo, 1);
   }
 }
 
@@ -117,7 +150,7 @@ export function seedOf(id) {
 /**
  * Appends one structure to `out`. `s` has { id, open, base, baseMax, top, floors, roof, rise, rings } where `rings`
  * is [outer, ...holes] as flat [x, z, ...] arrays and `kind` is its index into the kinds list (stored in info.w).
- * `roofIsHip` is s.roof === 1; `solidHeight` limits ruins to low walls.
+ * `s.roof` is 0 flat, 1 hip, 2 gable along the long axis, 3 gable along the short axis; `solidHeight` limits ruins to low walls.
  */
 export function appendStructure(out, s, { ruins = false } = {}) {
   const [outer, ...holes] = s.rings;
@@ -134,7 +167,7 @@ export function appendStructure(out, s, { ruins = false } = {}) {
     return;
   }
 
-  const hip = s.roof === 1 && !ruins;
+  const hip = s.roof >= 1 && !ruins; // hip or gable
   const eaveY = hip ? top - s.rise * EAVE_FRACTION : top;
   // Window rows that fit under the eave, counted from the highest ground at the footprint
   let rows = Math.max(0, Math.floor((eaveY - s.baseMax) / FLOOR_HEIGHT - 0.15));
@@ -142,9 +175,13 @@ export function appendStructure(out, s, { ruins = false } = {}) {
   if (s.cat) rows = Math.max(1, Math.min(s.floors, Math.floor((eaveY - s.baseMax) / 2.3)));
   for (const ring of s.rings) pushWalls(out, ring, s.base - FOUNDATION, eaveY, s.baseMax, info(SURF.WALL, rows));
   if (hip) {
-    pushHipRoof(out, outer, eaveY, top + s.rise * RIDGE_FRACTION, info(SURF.TILE));
+    pushHipRoof(out, outer, eaveY, top + s.rise * RIDGE_FRACTION, info(SURF.TILE), s.roof, info(SURF.WALL));
   } else {
     pushCap(out, outer, holes, top, info(SURF.FLAT), 1);
+  }
+  if (s.tower) {
+    const box = orientedBox(outer);
+    pushTower(out, s.tower, box ? [box.ux, box.uz] : [1, 0], s.base - FOUNDATION, info(SURF.WALL), info(SURF.TILE));
   }
 }
 

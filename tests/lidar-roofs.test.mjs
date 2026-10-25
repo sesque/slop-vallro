@@ -51,3 +51,17 @@ test('refineWithLidar: a hip roof with no relief is flat, and one with relief ta
   assert.equal(pitched.roof, ROOF.HIP);
   assert.equal(pitched.rise, 2.6);
 });
+
+test('roofShape tells a gable from a hip by the height at the ridge ends', async () => {
+  const { roofShape } = await import('../tools/vallromanes/lidar-roofs.mjs');
+  const ring = [Float32Array.from([-8, -4, 8, -4, 8, 4, -8, 4])]; // 16 x 8 m, long axis along x
+  const box = { cx: 0, cz: 0, ux: 1, uz: 0, hx: 8, hz: 4 };
+  const h = (fn) => grid((x, z) => H0 + 6 + fn(Math.abs(x) / 8, Math.abs(z) / 4));
+  const gable = roofShape(ring, box, h((A, B) => 3 * (1 - B)));
+  assert.equal(gable, 'gable');
+  const hip = roofShape(ring, box, h((A, B) => 3 * Math.min(1 - B, (1 - A) * 2)));
+  assert.equal(hip, 'hip');
+  const across = roofShape(ring, box, h((A, B) => 3 * (1 - A)));
+  assert.equal(across, 'gableShort');
+  assert.equal(roofShape(ring, box, grid(() => NODATA)), null);
+});

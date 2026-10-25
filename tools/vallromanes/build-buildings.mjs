@@ -10,7 +10,7 @@ import { E0, N0, H0, toLocal } from './frame.mjs';
 import { readBue } from './read-bue.mjs';
 import { loadTerrain } from '../../js/geo/load-geodata.js';
 import { fsFetch } from './fs-fetch.mjs';
-import { roofStats, loadDsm } from './lidar-roofs.mjs';
+import { roofStats, roofShape, findSpike, loadDsm } from './lidar-roofs.mjs';
 import { loadCatastro } from './catastro.mjs';
 import { centroid, orientedBox, pointInRings, reverseRing, signedArea, simplifyRing } from '../../js/geo/polygon.js';
 
@@ -32,11 +32,14 @@ export const KINDS = [
   { name: 'cemetery', re: /^CON_31pol_PL$/, open: false },
   { name: 'tower', re: /^ENE_03pol_PL$/, open: false }
 ];
-export const ROOF = { FLAT: 0, HIP: 1 };
+export const ROOF = { FLAT: 0, HIP: 1, GABLE: 2, GABLE_SHORT: 3 };
 export const FLAG = { TALL: 1, SHORT: 2, BURIED: 4, LOW_TOP: 8, LIDAR_TOP: 16 };
 export const LIDAR_TOP_DIFF = 1.2; // m: a BUE top this far from the LiDAR roof level is replaced by it
 export const LIDAR_FLAT_RELIEF = 0.9; // m between eave and ridge below which a roof counts as flat
 export const MIN_HEIGHT = 2.2; // spec §5.3
+// Landmarks that get more than a plain box: a church shows its bell tower. The point is where the survey puts the place (labels.json);
+// the structure is the building whose footprint contains it. The tower comes from the LiDAR spike on or beside the roof.
+export const LANDMARKS = [{ name: 'Sant Vicenç', type: 'church', x: 49, z: -11 }];
 const MIN_AREA = 0.2; // m², below this a polygon is a survey artefact
 const FLOOR_HEIGHT = 3.0;
 const SIMPLIFY_TOL = 0.1; // spec §5.3
@@ -111,7 +114,7 @@ export function chooseRoof(outer, holes, kindIndex) {
  * LIDAR_FLAT_RELIEF becomes flat, and a hip roof takes its rise from the relief. Only buildings and sheds (kinds 0 and 1).
  * `d` = describeStructure's result and `roof` = chooseRoof's; returns the new { top, floors, flags, roof, rise, changed }.
  */
-export function refineWithLidar(d, roof, st, kindIndex, open, baseMean) {
+export function refineWithLidar(d, roof, st, kindIndex, open, baseMean, shape = null) {
   const out = { top: d.top, floors: d.floors, flags: d.flags, roof: roof.roof, rise: roof.rise, changed: { top: false, roof: false } };
   if (!st || kindIndex > 1) return out;
   const bad = d.flags & (FLAG.BURIED | FLAG.SHORT | FLAG.LOW_TOP);
@@ -128,7 +131,11 @@ export function refineWithLidar(d, roof, st, kindIndex, open, baseMean) {
   if (roof.roof === ROOF.HIP) {
     const relief = st.ridge - st.eave;
     if (relief < LIDAR_FLAT_RELIEF) { out.roof = ROOF.FLAT; out.rise = 0; out.changed.roof = true; }
-    else { out.rise = +Math.max(0.6, Math.min(4, relief)).toFixed(2); out.changed.roof = Math.abs(out.rise - roof.rise) > 0.3; }
+    else if (shape === 'gable' || shape === 'gableShort') {
+      out.roof = shape === 'gable' ? ROOF.GABLE : ROOF.GABLE_SHORT;
+      out.rise = +Math.max(0.6, Math.min(4, relief)).toFixed(2);
+      out.changed.roof = true;
+    } else { out.rise = +Math.max(0.6, Math.min(4, relief)).toFixed(2); out.changed.roof = Math.abs(out.rise - roof.rise) > 0.3; }
   }
   return out;
 }
@@ -138,8 +145,9 @@ export function buildBuildings(features, ground, boundaryRings, lidar = null, ca
   const rings = [];
   let ringVerts = 0;
   const dropped = { degenerate: 0, outside: 0 };
-  const lidarCount = { topReplaced: 0, flattened: 0, riseSet: 0, noPixels: 0 };
+  const lidarCount = { topReplaced: 0, flattened: 0, riseSet: 0, noPixels: 0, gables: 0 };
   const catCount = { joined: 0, floorsChanged: 0 };
+  const landmarkCount = { churches: 0 };
   const ids = new Set();
   const seen = { vertsBefore: 0, vertsAfter: 0 };
 
@@ -163,10 +171,13 @@ export function buildBuildings(features, ground, boundaryRings, lidar = null, ca
     if (lidar) {
       const st = kindIndex <= 1 ? roofStats([outer, ...holes], lidar) : null;
       if (kindIndex <= 1 && !st) lidarCount.noPixels++;
-      const r = refineWithLidar(d, roof, st, kindIndex, KINDS[kindIndex].open, d.baseMean);
+      let shape = null;
+      if (st && roof.roof === ROOF.HIP) { const box = orientedBox(outer); if (box) shape = roofShape([outer, ...holes], box, lidar); }
+      const r = refineWithLidar(d, roof, st, kindIndex, KINDS[kindIndex].open, d.baseMean, shape);
+      if (r.roof === ROOF.GABLE || r.roof === ROOF.GABLE_SHORT) lidarCount.gables++;
       if (r.changed.top) lidarCount.topReplaced++;
       if (r.changed.roof && r.roof === ROOF.FLAT) lidarCount.flattened++;
-      else if (r.changed.roof) lidarCount.riseSet++;
+      else if (r.changed.roof && r.roof === ROOF.HIP) lidarCount.riseSet++;
       d = { ...d, top: r.top, floors: r.floors, flags: r.flags };
       roof = { roof: r.roof, rise: r.rise };
     }
@@ -179,6 +190,15 @@ export function buildBuildings(features, ground, boundaryRings, lidar = null, ca
       if (cat.floors !== d.floors) catCount.floorsChanged++;
       d = { ...d, floors: Math.min(10, cat.floors) };
     } else cat = null;
+    // a landmark church: its bell tower from the LiDAR
+    let tower = null;
+    if (lidar && kindIndex === 0) {
+      const lm = LANDMARKS.find((l) => l.type === 'church' && pointInRings(l.x, l.z, allRings));
+      if (lm) {
+        const sp = findSpike(allRings, lidar);
+        if (sp) { tower = [+sp.x.toFixed(2), +sp.z.toFixed(2), sp.size, +sp.top.toFixed(2)]; landmarkCount.churches++; }
+      }
+    }
     const cm = allRings.map((r) => r.map((v) => Math.round(v * 100)));
     let id = stableId(f.cas, cm.flat());
     while (ids.has(id)) id = stableId(id, [ids.size]); // vanishingly rare; keep ids unique
@@ -187,6 +207,7 @@ export function buildBuildings(features, ground, boundaryRings, lidar = null, ca
       id, kind: kindIndex,
       base: +d.base.toFixed(2), baseMax: +d.baseMax.toFixed(2), top: +d.top.toFixed(2),
       floors: d.floors, roof: roof.roof, rise: roof.rise, flags: d.flags,
+      ...(tower ? { tower } : {}),
       ...(cat ? { cat: 1, use: cat.use, ...(cat.year ? { year: cat.year } : {}) } : {}),
       rings: allRings.map((r, i) => [ringVerts + allRings.slice(0, i).reduce((s, q) => s + q.length / 2, 0), r.length / 2])
     });
@@ -196,7 +217,7 @@ export function buildBuildings(features, ground, boundaryRings, lidar = null, ca
   const bin = new Int32Array(ringVerts * 2);
   let o = 0;
   for (const r of rings) { bin.set(r, o); o += r.length; }
-  return { records, bin, dropped, seen, lidarCount, catCount };
+  return { records, bin, dropped, seen, lidarCount, catCount, landmarkCount };
 }
 
 async function main() {
@@ -210,9 +231,10 @@ async function main() {
   console.log(lidar ? 'LiDAR DSM found: roofs and tops are checked against it' : 'No LiDAR DSM (fetch-icgc-dtm.mjs --product dsm --level 0): BUE tops only');
   const catastro = loadCatastro(path.join(RAW, 'catastro'));
   console.log(catastro ? `Catastro found: ${catastro.buildings} buildings, ${catastro.parts} parts` : 'No Catastro files (raw/catastro): BUE floors only');
-  const { records, bin, dropped, seen, lidarCount, catCount } = buildBuildings(features, ground, boundary.rings, lidar, catastro);
+  const { records, bin, dropped, seen, lidarCount, catCount, landmarkCount } = buildBuildings(features, ground, boundary.rings, lidar, catastro);
+  console.log(`Landmarks: ${landmarkCount.churches} church tower found`);
   if (catastro) console.log(`Catastro: ${catCount.joined} structures joined, floors changed in ${catCount.floorsChanged}`);
-  if (lidar) console.log(`LiDAR: ${lidarCount.topReplaced} tops replaced by the roof level, ${lidarCount.flattened} hip roofs made flat, ${lidarCount.riseSet} hip rises set from the relief, ${lidarCount.noPixels} buildings without enough pixels`);
+  if (lidar) console.log(`LiDAR: ${lidarCount.topReplaced} tops replaced by the roof level, ${lidarCount.flattened} hip roofs made flat, ${lidarCount.gables} gable roofs, ${lidarCount.riseSet} hip rises set from the relief, ${lidarCount.noPixels} buildings without enough pixels`);
   if (!records.length) throw new Error('No structures baked');
   for (const r of records) {
     if (![r.base, r.baseMax, r.top].every(Number.isFinite)) throw new Error(`Non-finite height in ${r.id}`);
@@ -230,7 +252,7 @@ async function main() {
   const floorHist = {};
   for (const r of buildings) floorHist[r.floors] = (floorHist[r.floors] || 0) + 1;
   console.log(`Floors: ${Object.entries(floorHist).map(([k, v]) => `${k}:${v}`).join('  ')}`);
-  console.log(`Roofs: ${count((r) => r.roof === ROOF.HIP)} hip, ${count((r) => r.roof === ROOF.FLAT)} flat (of ${buildings.length} buildings, ${count((r) => r.roof === ROOF.HIP)} hips overall)`);
+  console.log(`Roofs: ${count((r) => r.roof === ROOF.HIP)} hip, ${count((r) => r.roof === ROOF.GABLE || r.roof === ROOF.GABLE_SHORT)} gable, ${count((r) => r.roof === ROOF.FLAT)} flat (all structures ${records.length})`);
   const flagged = (bit) => count((r) => r.flags & bit);
   const review = FLAG.TALL | FLAG.SHORT | FLAG.BURIED;
   const flaggedBuildings = buildings.filter((r) => r.flags & review).length;

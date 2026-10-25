@@ -113,3 +113,53 @@ test('toTypedBuffers returns float arrays of matching sizes', () => {
   assert.equal(b.uv.length / 2, b.position.length / 3);
   assert.equal(b.info.length / 4, b.position.length / 3);
 });
+
+test('gable roof along the long axis: two sloping faces up, two vertical gable ends facing outward, same eave and ridge heights', () => {
+  const out = newBuffers();
+  appendStructure(out, structure({ roof: 2, rise: 2 }));
+  const tris = triangles(out);
+  const roof = tris.filter((t) => t.surf === SURF.TILE);
+  assert.equal(roof.length, 4, 'two faces of two triangles');
+  let projected = 0;
+  for (const t of roof) { assert.ok(t.normal[1] > 0); projected += Math.abs(t.cross[1]) / 2; }
+  assert.ok(Math.abs(projected - 72) < 1e-6, `projected roof area ${projected}`);
+  const eave = 108 - 2 * 0.55, ridge = 108 + 2 * 0.45;
+  const ys = roof.flatMap((t) => [t.a[1], t.b[1], t.c[1]]);
+  assert.ok(Math.abs(Math.min(...ys) - eave) < 1e-9 && Math.abs(Math.max(...ys) - ridge) < 1e-9);
+  // the ridge runs along x (the 12 m side): its ends are at x = 0 and x = 12 on the ridge line z = 3
+  const ridgePts = roof.flatMap((t) => [t.a, t.b, t.c]).filter((p) => Math.abs(p[1] - ridge) < 1e-9);
+  assert.ok(ridgePts.every((p) => Math.abs(p[2] - 3) < 1e-9) && Math.min(...ridgePts.map((p) => p[0])) === 0 && Math.max(...ridgePts.map((p) => p[0])) === 12);
+  // gable ends: vertical wall triangles above the eave, normals along -x and +x
+  const gables = tris.filter((t) => t.surf === SURF.WALL && Math.abs(t.normal[1]) < 1e-9 && t.a[1] >= eave - 1e-9 && t.b[1] >= eave - 1e-9 && t.c[1] >= eave - 1e-9 && Math.max(t.a[1], t.b[1], t.c[1]) > eave + 1e-9);
+  assert.equal(gables.length, 2);
+  assert.deepEqual(gables.map((t) => Math.sign(t.normal[0])).sort(), [-1, 1]);
+});
+
+test('gable roof along the short axis puts the ridge across the building', () => {
+  const out = newBuffers();
+  appendStructure(out, structure({ roof: 3, rise: 2 }));
+  const ridge = 108 + 2 * 0.45;
+  const ridgePts = triangles(out).filter((t) => t.surf === SURF.TILE).flatMap((t) => [t.a, t.b, t.c]).filter((p) => Math.abs(p[1] - ridge) < 1e-9);
+  assert.ok(ridgePts.every((p) => Math.abs(p[0] - 6) < 1e-9), 'the ridge is the line x = 6');
+  assert.ok(Math.min(...ridgePts.map((p) => p[2])) === 0 && Math.max(...ridgePts.map((p) => p[2])) === 6);
+});
+
+test('a bell tower: a plain shaft from the foundation up to a four-sided spire at the baked top', () => {
+  const out = newBuffers();
+  appendStructure(out, structure({ roof: 2, rise: 2, tower: [10, 3, 4, 125] }));
+  const tris = triangles(out);
+  const tx = (t) => [t.a, t.b, t.c].every((p) => p[0] >= 7.99 && p[0] <= 12.01 && p[2] >= 0.99 && p[2] <= 5.01);
+  const tower = tris.filter(tx).filter((t) => Math.max(t.a[1], t.b[1], t.c[1]) > 110 || Math.min(t.a[1], t.b[1], t.c[1]) < 100);
+  const spire = tower.filter((t) => t.surf === SURF.TILE);
+  assert.equal(spire.length, 4);
+  for (const t of spire) assert.ok(t.normal[1] > 0, 'spire faces up and out');
+  const ys = tower.flatMap((t) => [t.a[1], t.b[1], t.c[1]]);
+  assert.equal(Math.max(...ys), 125);
+  assert.ok(Math.min(...ys) < 100, 'the shaft starts at the foundation');
+  const walls = tower.filter((t) => t.surf === SURF.WALL && Math.abs(t.normal[1]) < 1e-9);
+  assert.ok(walls.length >= 8, 'four wall quads');
+  for (const t of walls) {
+    const mx = (t.a[0] + t.b[0] + t.c[0]) / 3 - 10, mz = (t.a[2] + t.b[2] + t.c[2]) / 3 - 3;
+    assert.ok(mx * t.normal[0] + mz * t.normal[2] > 0, 'tower walls face outward');
+  }
+});
