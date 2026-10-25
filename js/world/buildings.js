@@ -44,8 +44,12 @@ export function createBuildingMaterial() {
   const kind = floor(info.w);
   // use and era of the building (building-geometry.js styleOf) ride in the fraction of info.w
   const styleCode = floor(fract(info.w).mul(32.0).add(0.5));
-  const useCode = floor(styleCode.div(4.0));
-  const era = styleCode.sub(useCode.mul(4.0));
+  const plain = styleCode.lessThan(24.0).select(float(1.0), float(0.0)); // 0 for the landmark looks
+  const useCode = floor(styleCode.div(4.0)).mul(plain);
+  const era = styleCode.sub(floor(styleCode.div(4.0)).mul(4.0)).mul(plain);
+  // landmarks (styleCode 24..31): 1 town hall, 2 school, 3 masia, 4 church nave, 5 nursery school, 8 church tower
+  const lm = max(styleCode.sub(23.0), 0.0);
+  const isLm = (n) => flag(lm.equal(n));
   const facadeUV = uv();
   const flag = (cond) => cond.select(float(1.0), float(0.0));
 
@@ -58,6 +62,7 @@ export function createBuildingMaterial() {
   const fv = fract(facadeUV.y);
   const hasWindow = step(0.0, facadeUV.y)
     .mul(flag(row.add(0.5).lessThan(rows)))
+    .mul(max(float(1.0).sub(isLm(8.0)), flag(row.add(1.5).greaterThan(rows)))) // the tower has only its belfry row
     .mul(step(0.18, hash(vec2(cell, row).add(seed.mul(31.0)))))
     .mul(flag(surf.notEqual(3.0)));
   const inCol = smoothstep(0.2, 0.17, abs(cu.sub(0.5)));
@@ -86,6 +91,23 @@ export function createBuildingMaterial() {
   plaster = mix(plaster, color(0xa4a9ad), flag(useCode.equal(2.0)).mul(0.8));
   plaster = mix(plaster, color(0xf1ebdf), max(flag(useCode.equal(3.0)), flag(useCode.equal(4.0))).mul(0.6));
   const grain = hash(positionWorld.xz.mul(7.3).add(positionWorld.y.mul(5.1)));
+  // Landmark facades (photographs on Wikimedia Commons)
+  const blocks = floor(vec2(facadeUV.x.mul(2.4), facadeUV.y.mul(5.5)));
+  const blockHash = hash(blocks.add(seed.mul(17.0)));
+  const mortar = max(smoothstep(0.9, 0.97, fract(facadeUV.x.mul(2.4))), smoothstep(0.88, 0.96, fract(facadeUV.y.mul(5.5))));
+  const rubble = mix(mix(color(0xb9aa8d), color(0x9d9078), blockHash), color(0x7f7563), mortar.mul(0.7)); // masia: rubble stone
+  const ashlar = mix(mix(color(0xa29e92), color(0x8a857a), blockHash), color(0x6f6b62), mortar.mul(0.6)); // church tower: grey masonry
+  const band = max(smoothstep(0.78, 0.84, fv), smoothstep(0.1, 0.04, fv)); // a white band at every floor line
+  const brickHall = mix(mix(color(0x8c3f2b), color(0x74321f), blockHash.mul(0.8)), color(0xf2eee6), band.mul(0.9)); // town hall above the ground floor
+  const stoneHall = mix(color(0xd6a692), color(0xc8967f), hash(floor(vec2(facadeUV.x.mul(1.4), facadeUV.y.mul(3.0)))));
+  const hallWall = mix(brickHall, stoneHall, step(facadeUV.y, 1.0));
+  const schoolWall = mix(mix(color(0xe3cf5b), color(0xd8c24c), grain.mul(0.5)), mix(color(0xa9adb0), color(0x8f9498), step(0.5, fract(facadeUV.y.mul(7.0)))), step(1.0, facadeUV.y).mul(0.75));
+  plaster = mix(plaster, color(0xf0ece4), isLm(4.0));
+  plaster = mix(plaster, rubble, isLm(3.0));
+  plaster = mix(plaster, ashlar, isLm(8.0));
+  plaster = mix(plaster, mix(color(0xb4cbe2), color(0xa5bfdc), grain.mul(0.6)), isLm(5.0)); // nursery: pale blue walls
+  plaster = mix(plaster, hallWall, isLm(1.0));
+  plaster = mix(plaster, schoolWall, isLm(2.0));
 
   let wall = plaster.mul(float(0.9).add(grain.mul(0.16)));
   wall = mix(wall, color(0xfaf7f0), max(frameMask.sub(windowMask), 0.0).mul(0.9));

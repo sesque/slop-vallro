@@ -37,9 +37,18 @@ export const FLAG = { TALL: 1, SHORT: 2, BURIED: 4, LOW_TOP: 8, LIDAR_TOP: 16 };
 export const LIDAR_TOP_DIFF = 1.2; // m: a BUE top this far from the LiDAR roof level is replaced by it
 export const LIDAR_FLAT_RELIEF = 0.9; // m between eave and ridge below which a roof counts as flat
 export const MIN_HEIGHT = 2.2; // spec §5.3
-// Landmarks that get more than a plain box: a church shows its bell tower. The point is where the survey puts the place (labels.json);
-// the structure is the building whose footprint contains it. The tower comes from the LiDAR spike on or beside the roof.
-export const LANDMARKS = [{ name: 'Sant Vicenç', type: 'church', x: 49, z: -11 }];
+// Landmarks that get their own look (photographs on Wikimedia Commons, confirmed by the user): `look` is the facade style the shader draws
+// (1 town hall: pink stone ground floor, brick above with white bands; 2 school: yellow walls and grey metal; 3 masia: rubble stone;
+// 4 church: whitewashed nave; 5 nursery school: pale blue walls). The point is where the place is (Commons coordinates, or the survey for the church); the structure is the
+// building whose footprint contains it. A church also gets its bell tower from the LiDAR spike on or beside the roof.
+export const LOOK = { NONE: 0, TOWNHALL: 1, SCHOOL: 2, MASIA: 3, CHURCH: 4, NURSERY: 5 };
+export const LANDMARKS = [
+  { name: 'Sant Vicenç', look: LOOK.CHURCH, x: 49, z: -11, tower: true },
+  { name: 'Casa consistorial', look: LOOK.TOWNHALL, x: 11, z: -4, roof: { roof: ROOF.HIP, rise: 1.4 } }, // a shallow tile roof the LiDAR reads as flat
+  { name: 'Institut Escola Els Tres Pins', look: LOOK.SCHOOL, x: -142, z: -280 },
+  { name: 'Can Poal', look: LOOK.MASIA, x: 79, z: -3, chimney: true },
+  { name: 'Escola Bressol de Vallromanes', look: LOOK.NURSERY, x: -414, z: -164 } // Carrer de l'Alegria; photographs on Google Images (council site)
+];
 const MIN_AREA = 0.2; // m², below this a polygon is a survey artefact
 const FLOOR_HEIGHT = 3.0;
 const SIMPLIFY_TOL = 0.1; // spec §5.3
@@ -147,7 +156,7 @@ export function buildBuildings(features, ground, boundaryRings, lidar = null, ca
   const dropped = { degenerate: 0, outside: 0 };
   const lidarCount = { topReplaced: 0, flattened: 0, riseSet: 0, noPixels: 0, gables: 0 };
   const catCount = { joined: 0, floorsChanged: 0 };
-  const landmarkCount = { churches: 0 };
+  const landmarkCount = { found: [], towers: 0 };
   const ids = new Set();
   const seen = { vertsBefore: 0, vertsAfter: 0 };
 
@@ -190,13 +199,19 @@ export function buildBuildings(features, ground, boundaryRings, lidar = null, ca
       if (cat.floors !== d.floors) catCount.floorsChanged++;
       d = { ...d, floors: Math.min(10, cat.floors) };
     } else cat = null;
-    // a landmark church: its bell tower from the LiDAR
-    let tower = null;
-    if (lidar && kindIndex === 0) {
-      const lm = LANDMARKS.find((l) => l.type === 'church' && pointInRings(l.x, l.z, allRings));
+    // a landmark: its own look, and for a church the bell tower from the LiDAR
+    let tower = null, look = 0, chimney = false;
+    if (kindIndex === 0) {
+      const lm = LANDMARKS.find((l) => pointInRings(l.x, l.z, allRings));
       if (lm) {
-        const sp = findSpike(allRings, lidar);
-        if (sp) { tower = [+sp.x.toFixed(2), +sp.z.toFixed(2), sp.size, +sp.top.toFixed(2)]; landmarkCount.churches++; }
+        look = lm.look;
+        chimney = Boolean(lm.chimney);
+        if (lm.roof) roof = lm.roof;
+        landmarkCount.found.push(lm.name);
+        if (lm.tower && lidar) {
+          const sp = findSpike(allRings, lidar);
+          if (sp) { tower = [+sp.x.toFixed(2), +sp.z.toFixed(2), sp.size, +sp.top.toFixed(2)]; landmarkCount.towers++; }
+        }
       }
     }
     const cm = allRings.map((r) => r.map((v) => Math.round(v * 100)));
@@ -208,6 +223,8 @@ export function buildBuildings(features, ground, boundaryRings, lidar = null, ca
       base: +d.base.toFixed(2), baseMax: +d.baseMax.toFixed(2), top: +d.top.toFixed(2),
       floors: d.floors, roof: roof.roof, rise: roof.rise, flags: d.flags,
       ...(tower ? { tower } : {}),
+      ...(look ? { look } : {}),
+      ...(chimney ? { chimney: 1 } : {}),
       ...(cat ? { cat: 1, use: cat.use, ...(cat.year ? { year: cat.year } : {}) } : {}),
       rings: allRings.map((r, i) => [ringVerts + allRings.slice(0, i).reduce((s, q) => s + q.length / 2, 0), r.length / 2])
     });
@@ -232,7 +249,7 @@ async function main() {
   const catastro = loadCatastro(path.join(RAW, 'catastro'));
   console.log(catastro ? `Catastro found: ${catastro.buildings} buildings, ${catastro.parts} parts` : 'No Catastro files (raw/catastro): BUE floors only');
   const { records, bin, dropped, seen, lidarCount, catCount, landmarkCount } = buildBuildings(features, ground, boundary.rings, lidar, catastro);
-  console.log(`Landmarks: ${landmarkCount.churches} church tower found`);
+  console.log(`Landmarks: ${landmarkCount.found.join(', ') || 'none'}; ${landmarkCount.towers} bell tower from the LiDAR`);
   if (catastro) console.log(`Catastro: ${catCount.joined} structures joined, floors changed in ${catCount.floorsChanged}`);
   if (lidar) console.log(`LiDAR: ${lidarCount.topReplaced} tops replaced by the roof level, ${lidarCount.flattened} hip roofs made flat, ${lidarCount.gables} gable roofs, ${lidarCount.riseSet} hip rises set from the relief, ${lidarCount.noPixels} buildings without enough pixels`);
   if (!records.length) throw new Error('No structures baked');

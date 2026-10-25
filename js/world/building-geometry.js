@@ -109,7 +109,8 @@ function pushHipRoof(out, outer, eaveY, ridgeY, info, mode = 1, wallInfo = info)
   }
 }
 
-export const SPIRE_HEIGHT = 4; // m of the pyramid roof on a bell tower
+export const SPIRE_HEIGHT = 2.8; // m of the low pyramid roof on a bell tower
+export const TOWER_STYLE = 31; // the stone tower look in info.w (see styleOf)
 
 /**
  * A bell tower standing beside or inside a building: a square shaft with a pyramid roof. `tower` = [x, z, size, top] (the top of the
@@ -123,7 +124,9 @@ function pushTower(out, tower, axis, y0, wallInfo, roofInfo) {
   let flat = ring.flatMap((p) => p);
   if (signedArea(flat) < 0) flat = ring.slice().reverse().flatMap((p) => p); // outer rings have positive area
   const eave = top - SPIRE_HEIGHT;
-  pushWalls(out, flat, y0, eave, y0, wallInfo);
+  // one row of openings, the belfry, under the roof: the shader draws windows only in the row `rows` - 1
+  const shaftInfo = [Math.max(1, Math.floor((eave - y0) / FLOOR_HEIGHT)), wallInfo[1], wallInfo[2], wallInfo[3]];
+  pushWalls(out, flat, y0, eave, y0, shaftInfo);
   const apex = [cx, top, cz];
   const n = flat.length / 2;
   for (let i = 0; i < n; i++) {
@@ -132,12 +135,24 @@ function pushTower(out, tower, axis, y0, wallInfo, roofInfo) {
   }
 }
 
+// A square chimney stack on the ridge, a little off the middle, standing 1.5 m clear of the ridge line
+function pushChimney(out, outer, ridgeY, wallInfo, capInfo) {
+  const box = orientedBox(outer);
+  const cx = box.cx + box.ux * box.hx * 0.35, cz = box.cz + box.uz * box.hx * 0.35;
+  const h = 0.4, vx = -box.uz, vz = box.ux;
+  let ring = [[-h, -h], [h, -h], [h, h], [-h, h]].flatMap(([a, b]) => [cx + box.ux * a + vx * b, cz + box.uz * a + vz * b]);
+  if (signedArea(ring) < 0) ring = [[-h, h], [h, h], [h, -h], [-h, -h]].flatMap(([a, b]) => [cx + box.ux * a + vx * b, cz + box.uz * a + vz * b]);
+  pushWalls(out, ring, ridgeY - 0.8, ridgeY + 1.5, ridgeY - 0.8, [0, wallInfo[1], wallInfo[2], wallInfo[3]]);
+  pushCap(out, ring, [], ridgeY + 1.5, capInfo, 1);
+}
+
 /**
  * The style of a building from its Catastro use and year of construction, 0..23: use * 4 + era, with use 0 unknown or
  * residential, 1 agriculture, 2 industrial, 3 retail, 4 public service, 5 other; era 0 unknown, 1 before 1950, 2 1950-1989, 3 1990 on.
  * It rides in the fraction of `info.w` (kind + style / 32) for the facade shader.
  */
 export function styleOf(s) {
+  if (s.look) return 23 + s.look; // landmarks: 24 town hall, 25 school, 26 masia, 27 church, 28 nursery; 31 is the church tower
   const use = s.use === 2 ? 1 : s.use === 3 ? 2 : s.use === 4 ? 3 : s.use === 5 ? 4 : s.use === 6 ? 5 : 0;
   const era = !s.year ? 0 : s.year < 1950 ? 1 : s.year < 1990 ? 2 : 3;
   return use * 4 + era;
@@ -181,8 +196,10 @@ export function appendStructure(out, s, { ruins = false } = {}) {
   }
   if (s.tower) {
     const box = orientedBox(outer);
-    pushTower(out, s.tower, box ? [box.ux, box.uz] : [1, 0], s.base - FOUNDATION, info(SURF.WALL), info(SURF.TILE));
+    const stone = [0, SURF.WALL, seed, s.kind + TOWER_STYLE / 32];
+    pushTower(out, s.tower, box ? [box.ux, box.uz] : [1, 0], s.base - FOUNDATION, stone, info(SURF.TILE));
   }
+  if (s.chimney && hip) pushChimney(out, outer, top + s.rise * RIDGE_FRACTION, info(SURF.WALL), info(SURF.SLAB));
 }
 
 export function toTypedBuffers(out) {

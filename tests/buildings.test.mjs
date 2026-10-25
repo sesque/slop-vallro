@@ -137,3 +137,14 @@ test('baked data: structures load, sit inside the municipality and on the terrai
   assert.ok(boundary.meta.areaKm2 > 10 && boundary.meta.areaKm2 < 11);
   await assert.rejects(loadBuildings('./nowhere/', fsFetch), /HTTP 404/);
 });
+
+test('landmarks: the photographed buildings are found in the baked data with their looks', async () => {
+  const { LANDMARKS, LOOK } = await import('../tools/vallromanes/build-buildings.mjs');
+  assert.deepEqual(LANDMARKS.map((l) => l.look).sort(), [LOOK.TOWNHALL, LOOK.SCHOOL, LOOK.MASIA, LOOK.CHURCH, LOOK.NURSERY].sort());
+  const fs = await import('node:fs');
+  const baked = JSON.parse(fs.readFileSync(new URL('../data/buildings.json', import.meta.url), 'utf8')).buildings;
+  for (const look of [LOOK.TOWNHALL, LOOK.SCHOOL, LOOK.MASIA, LOOK.CHURCH, LOOK.NURSERY]) assert.equal(baked.filter((b) => b.look === look).length, 1, `exactly one building with look ${look}`);
+  assert.ok(baked.find((b) => b.look === LOOK.CHURCH).tower, 'the church has its bell tower');
+  assert.ok(baked.find((b) => b.look === LOOK.MASIA).chimney, 'the masia has a chimney');
+  assert.equal(baked.find((b) => b.look === LOOK.TOWNHALL).roof, 1, 'the town hall has its shallow tile roof');
+});

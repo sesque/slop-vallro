@@ -163,3 +163,18 @@ test('a bell tower: a plain shaft from the foundation up to a four-sided spire a
     assert.ok(mx * t.normal[0] + mz * t.normal[2] > 0, 'tower walls face outward');
   }
 });
+
+test('landmark looks ride in the style code, and a masia chimney stands on its ridge', async () => {
+  const { styleOf } = await import('../js/world/building-geometry.js');
+  assert.equal(styleOf({ look: 1 }), 24);
+  assert.equal(styleOf({ look: 4 }), 27);
+  assert.equal(styleOf({ look: 5 }), 28);
+  assert.equal(styleOf({ look: 2, use: 3, year: 1990 }), 25, 'a landmark look wins over use and year');
+  const plain = newBuffers(), withChimney = newBuffers();
+  appendStructure(plain, structure({ roof: 2, rise: 2 }));
+  appendStructure(withChimney, structure({ roof: 2, rise: 2, chimney: 1 }));
+  assert.ok(withChimney.position.length > plain.position.length, 'the chimney adds faces');
+  const ys = withChimney.position.filter((_, i) => i % 3 === 1);
+  const ridge = 108 + 2 * 0.45;
+  assert.ok(Math.abs(Math.max(...ys) - (ridge + 1.5)) < 1e-9, 'it stands 1.5 m above the ridge');
+});

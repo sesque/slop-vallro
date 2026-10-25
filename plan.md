@@ -161,11 +161,17 @@ facade detail yet); about 2.5 M triangles in a typical view at 90 to 120 fps in 
       georeferenced POUM).
 - [x] Gable roofs from the LiDAR (`roofShape`): near-rectangular pitched roofs whose ridge ends keep the ridge height become gables (ridge along
       the long or the short axis); the rest stay hips. 209 gables, 911 hips, 3 193 flat. Vertical gable ends in `building-geometry.js`.
-- [x] Landmark church, first step: Sant Vicenç (Plaça de l'Església, rebuilt 1908 by J. M. Pericas per the Diputació heritage record) gets a bell
-      tower taken from the LiDAR spike beside its nave (about 21 m, square shaft and pyramid roof). `LANDMARKS` in `build-buildings.mjs`.
-- [ ] Other special buildings: the Ajuntament (Plaça de l'Església 6), schools, CAP, Casal and the masies have no distinguishing data
-      (the survey's point for the Ajuntament, the origin, is a plaza, not the building), and I have not seen their facades. Needs photos
-      or a short description of each before modelling; the data cannot tell them from ordinary buildings.
+- [x] Four landmarks modelled from Wikimedia Commons photographs the user confirmed (`LANDMARKS` and `LOOK` in `build-buildings.mjs`; facades in
+      `js/world/buildings.js`, tower and chimney in `building-geometry.js`): the town hall (Casa consistorial, pink stone ground floor, brick above
+      with white floor bands, rounded corner from the survey footprint, shallow tile roof), the Institut Escola Els Tres Pins (yellow walls with a
+      grey metal band, flat roof), Can Poal (rubble stone, tiled gable, chimney) and the Sant Vicenç church (whitewashed nave and a slender grey-stone
+      bell tower with a low tile pyramid and a belfry row, 21 m from the LiDAR spike). Reference photos are not copied into the repo (their
+      licences are Commons'); they were only used for colours and shapes. Not done: the arcade and balcony slabs of the town hall, the school's covered
+      walkway, arched doors of the masia.
+- [x] The Escola Bressol de Vallromanes (Carrer de l'Alegria, found through a Google Images search of the council's photographs): pale blue walls
+      on its single-storey footprint. Not done: the mural, the wooden pergola along its courtyard.
+- [ ] Other landmarks: the CAP, the Casal and the other masies have no photograph on Commons; Torre Tavernera, Can Genís Paret and Can
+      Gurguí do and could be added if wanted.
 - [ ] Rest of the municipality outside the BUE (required, not optional): roads and tracks from RTT/OSM, buildings
       from Catastro footprints, forest and farmland from RTT/LiDAR with instanced woodland, at lower detail.
 
