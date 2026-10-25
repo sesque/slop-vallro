@@ -25,6 +25,14 @@ export async function loadBoundary(baseUrl = './data/', fetchImpl = globalThis.f
   return { meta, rings: meta.rings.map((r) => Float32Array.from(r)) };
 }
 
+// The fascia signs of the shops: [{ name, sector, building, x, y, z, nx, nz, width, height }]
+export async function loadShops(baseUrl = './data/', fetchImpl = globalThis.fetch) {
+  const res = await fetchImpl(`${baseUrl}shops.json`);
+  if (!res.ok) throw new Error(`shops.json: HTTP ${res.status}`);
+  const meta = await res.json();
+  return { meta, shops: meta.shops };
+}
+
 // The vegetation height grid: { meta (cell, step, width, height, originX, originZ), data: Uint8Array (row 0 = north, heights in steps of meta.step m) }
 export async function loadCanopy(baseUrl = './data/', fetchImpl = globalThis.fetch) {
   const [metaRes, binRes] = await Promise.all([fetchImpl(`${baseUrl}canopy.json`), fetchImpl(`${baseUrl}canopy.bin`)]);

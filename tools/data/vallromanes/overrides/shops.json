@@ -1,0 +1,161 @@
+{
+  "_about": "Shops and services of the council's business directory (Empreses de Vallromanes) that have a shopfront, with where to put their fascia sign. `at` is one of: { place: a name of data/labels.json places (the survey's own point), lat/lon from OpenStreetMap or a map site, street + number matched with the house numbers of the survey }. Looked up on 2026-10-25. Points marked by a latitude and longitude come from OpenStreetMap or from the Google Maps marker of the business (accurate to about 10 m). Left out: businesses without a shopfront (offices, trades, home services), Vallromanes 2000 and La Canina (no usable address) and Perruqueria Jordi (Rbla. de Vallromanes 57, marked permanently closed on Google).",
+  "shops": [
+    {
+      "name": "Ca la Pilu",
+      "sector": "food",
+      "at": {
+        "lat": 41.5317614,
+        "lon": 2.297396
+      }
+    },
+    {
+      "name": "Queviures Guàrdia · Cal Barber",
+      "sector": "food",
+      "at": {
+        "lat": 41.53125,
+        "lon": 2.29795
+      }
+    },
+    {
+      "name": "Supermercat",
+      "sector": "food",
+      "at": {
+        "street": "Rambla de Vallromanes",
+        "number": "44"
+      }
+    },
+    {
+      "name": "Forn de Pa Maria",
+      "sector": "food",
+      "at": {
+        "lat": 41.53151,
+        "lon": 2.29822
+      }
+    },
+    {
+      "name": "Farmàcia Guanter",
+      "sector": "pharmacy",
+      "at": {
+        "street": "Rambla de Vallromanes",
+        "number": "42"
+      }
+    },
+    {
+      "name": "Estanc",
+      "sector": "shop",
+      "at": {
+        "street": "Rambla de Vallromanes",
+        "number": "39"
+      }
+    },
+    {
+      "name": "Blue Moon",
+      "sector": "shop",
+      "at": {
+        "street": "Rambla de Vallromanes",
+        "number": "39"
+      }
+    },
+    {
+      "name": "Bar La Granja",
+      "sector": "bar",
+      "at": {
+        "lat": 41.5318839,
+        "lon": 2.2972194
+      }
+    },
+    {
+      "name": "Veterinari La Riera",
+      "sector": "service",
+      "at": {
+        "lat": 41.5328006,
+        "lon": 2.294428
+      }
+    },
+    {
+      "name": "CaixaBank",
+      "sector": "bank",
+      "at": {
+        "lat": 41.53153,
+        "lon": 2.29762
+      }
+    },
+    {
+      "name": "Café La Plaça",
+      "sector": "bar",
+      "at": {
+        "lat": 41.53125,
+        "lon": 2.29938
+      }
+    },
+    {
+      "name": "Bar Frankfurt El Racó",
+      "sector": "bar",
+      "at": {
+        "lat": 41.53164,
+        "lon": 2.30044
+      }
+    },
+    {
+      "name": "Restaurant Can Poal",
+      "sector": "restaurant",
+      "at": {
+        "lat": 41.53175,
+        "lon": 2.29883
+      }
+    },
+    {
+      "name": "Restaurant La Noguera",
+      "sector": "restaurant",
+      "at": {
+        "place": "Restaurant la Noguera"
+      }
+    },
+    {
+      "name": "Restaurant Can Matias",
+      "sector": "restaurant",
+      "at": {
+        "place": "Can Matias"
+      }
+    },
+    {
+      "name": "Hotel Can Galvany",
+      "sector": "hotel",
+      "at": {
+        "place": "Hotel Can Galvany"
+      }
+    },
+    {
+      "name": "Hotel Mas Salagros",
+      "sector": "hotel",
+      "at": {
+        "place": "Hotel Mas Salagros"
+      }
+    },
+    {
+      "name": "Club de Golf",
+      "sector": "restaurant",
+      "at": {
+        "lat": 41.5312653,
+        "lon": 2.2858821
+      }
+    },
+    {
+      "name": "Vallromanes Motors",
+      "sector": "service",
+      "at": {
+        "street": "Carrer d'Alella",
+        "number": "4"
+      }
+    },
+    {
+      "name": "Vallromanes Verd",
+      "sector": "shop",
+      "at": {
+        "lat": 41.5268153,
+        "lon": 2.2923055
+      }
+    }
+  ]
+}

@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { CRS, E0, H0, N0 } from './frame.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const stages = ['build-boundary.mjs', 'build-roads.mjs', 'build-stairs.mjs', 'build-terrain.mjs', 'build-buildings.mjs', 'build-features.mjs', 'build-props.mjs', 'build-canopy.mjs', 'build-labels.mjs'];
+const stages = ['build-boundary.mjs', 'build-roads.mjs', 'build-stairs.mjs', 'build-terrain.mjs', 'build-buildings.mjs', 'build-features.mjs', 'build-props.mjs', 'build-canopy.mjs', 'build-labels.mjs', 'build-shops.mjs'];
 
 for (const stage of stages) {
   console.log(`\n=== ${stage} ===`);
@@ -22,7 +22,7 @@ for (const stage of stages) {
   }
 }
 
-const files = ['boundary.json', 'roads.json', 'stairs.json', 'terrain.json', 'terrain.bin', 'buildings.json', 'buildings.bin', 'features.json', 'features.bin', 'props.json', 'props.bin', 'canopy.json', 'canopy.bin', 'labels.json'];
+const files = ['boundary.json', 'roads.json', 'stairs.json', 'terrain.json', 'terrain.bin', 'buildings.json', 'buildings.bin', 'features.json', 'features.bin', 'props.json', 'props.bin', 'canopy.json', 'canopy.bin', 'labels.json', 'shops.json'];
 const manifestFiles = {};
 for (const f of files) {
   const buf = fs.readFileSync(path.join(root, 'data', f));

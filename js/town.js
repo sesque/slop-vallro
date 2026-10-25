@@ -9,7 +9,7 @@ import { GamepadControls } from './gamepad-controls.js';
 import { CameraSystem, CAMERA_PRESETS } from './cameras.js';
 import { LightingSystem } from './lighting.js';
 import { TownMapSystem } from './town-map.js';
-import { loadBoundary, loadBuildings, loadCanopy, loadFeatures, loadLabels, loadProps, loadRoads, loadStairs, loadTerrain } from './geo/load-geodata.js';
+import { loadBoundary, loadBuildings, loadCanopy, loadFeatures, loadLabels, loadProps, loadRoads, loadShops, loadStairs, loadTerrain } from './geo/load-geodata.js';
 import { confineToRing, pointInRings } from './geo/polygon.js';
 import { createRoadIndex } from './geo/road-index.js';
 import { createStairIndex } from './geo/stair-index.js';
@@ -21,6 +21,7 @@ import { buildStreets } from './world/streets.js';
 import { buildFeatures } from './world/features.js';
 import { buildProps } from './world/props.js';
 import { buildWoodland } from './world/woodland.js';
+import { buildSigns } from './world/signs.js';
 import { CURB, LIFT, ROAD_DEPTH, TRACK_LIFT } from './world/street-geometry.js';
 import { createTraffic } from './traffic.js';
 import { TownAudio } from './audio.js';
@@ -83,15 +84,15 @@ export async function initTown() {
 
   setProgress(0.08, 'Loading the terrain, buildings and streets of Vallromanes...');
   let loaded = 0;
-  const DATA_FILES = 9;
+  const DATA_FILES = 10;
   const tick = (promise) => promise.then((result) => {
     loaded++;
     setProgress(0.08 + (0.4 * loaded) / DATA_FILES, `Loading the data of Vallromanes (${loaded} of ${DATA_FILES})...`);
     return result;
   });
-  const [{ sampler, frame }, boundary, { structures }, roads, featureData, stairData, { props: propData }, labels, canopy] = await Promise.all([
+  const [{ sampler, frame }, boundary, { structures }, roads, featureData, stairData, { props: propData }, labels, canopy, shopData] = await Promise.all([
     tick(loadTerrain('./data/')), tick(loadBoundary('./data/')), tick(loadBuildings('./data/')), tick(loadRoads('./data/')), tick(loadFeatures('./data/')),
-    tick(loadStairs('./data/')), tick(loadProps('./data/')), tick(loadLabels('./data/')), tick(loadCanopy('./data/'))
+    tick(loadStairs('./data/')), tick(loadProps('./data/')), tick(loadLabels('./data/')), tick(loadCanopy('./data/')), tick(loadShops('./data/'))
   ]);
   setProgress(0.5, 'Building the town...');
   await paint();
@@ -126,6 +127,7 @@ export async function initTown() {
     confine: (x, z) => confineToRing(boundary.rings[0], x, z, EDGE_MARGIN)
   };
 
+  const signs = buildSigns(scene, shopData.shops);
   setProgress(0.7, 'Planting the woods...');
   await paint();
   // The woods: instanced trees where the canopy grid is tall, not on streets and not where the survey has its own trees
@@ -459,7 +461,7 @@ export async function initTown() {
 
   // Handles for the console and for checks of the running page
   window.vallromanes = {
-    gpuErrors, THREE, scene, renderer, audio, woodland, traffic, laneGraph, pavements, terrain, buildings, streets, features, props, stairIndex, roadIndex, roads, boundary, sampler,
+    gpuErrors, THREE, scene, renderer, signs, audio, woodland, traffic, laneGraph, pavements, terrain, buildings, streets, features, props, stairIndex, roadIndex, roads, boundary, sampler,
     labels, mapSystem, controllerManager, cameraSystem, lightingSystem, selectMode, selectCamera, selectTime, teleportTo
   };
 
@@ -500,6 +502,7 @@ export async function initTown() {
       const focus = cameraSystem.getActivePreset().category === 'follow' ? ent.position : cameraSystem.currentPos;
       traffic.update(dt, elapsed, cameraSystem.camera, focus, ent, controllerManager.activeMode);
       audio.update(dt, ent, controllerManager.activeMode, cameraSystem.camera);
+      signs.update();
     }
     terrain.update(cameraSystem.camera.position);
     props.update(cameraSystem.camera);

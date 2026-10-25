@@ -223,6 +223,15 @@ facade detail yet); about 2.5 M triangles in a typical view at 90 to 120 fps in 
       Not done: birdsong or cicadas, church bells, traffic horns, voices of walkers (the synthesis for horns and speech exists in `audio-events.js`).
 
 ## Phase 11 — Shop signs and walker fixes
+- [x] Fascia signs for 19 shops of the council's business directory (the list the project owner supplied as an image): `overrides/shops.json` (names, sectors, where
+      each is: a survey place, a point in degrees from OpenStreetMap or the Google Maps marker, or a street and house number; missing house numbers are
+      estimated between neighbours on the same side), `build-shops.mjs` (finds the building, picks the wall facing the street, puts the sign 3.1 m above the
+      pavement, spreads signs that share a wall) -> `data/shops.json` (0.003 MB); `js/world/sign-geometry.js` and `signs.js` draw them as one mesh with a text
+      atlas, coloured by sector and lit from within at dusk. Placed: Ca la Pilu, Queviures Guàrdia · Cal Barber, Supermercat, Forn de Pa Maria, Farmàcia
+      Guanter, Estanc, Blue Moon, Bar La Granja, Veterinari La Riera, CaixaBank, Café La Plaça, Bar Frankfurt El Racó, Restaurant Can Poal, La Noguera, Can
+      Matias, Hotel Can Galvany, Hotel Mas Salagros, Club de Golf, Vallromanes Motors. Not placed: Vallromanes Verd (its point is more than 20 m from any
+      building), Vallromanes 2000 and La Canina (no usable address), Perruqueria Jordi (Google marks it permanently closed), and the businesses without a
+      shopfront (lawyers, architects, trades, home services). Map markers are accurate to about 10 m, so a sign can sit on the neighbouring building.
 - [x] Walkers no longer jump or spin: the corners of the pavement graph are now short links that are walked (before, a walker was moved up to 17.8 m in one step
       from the end of one pavement to the start of the next), position and heading are eased (at most 2.6 m/s and 5 rad/s), and a walker stops before turning
       round or turns back instead of crossing under a car after a long wait. Longest step 0.26 m per 0.1 s, sharpest turn 0.5 rad, over 20 simulated minutes of 100 walkers.

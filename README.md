@@ -1,6 +1,6 @@
 # Slop Vallromanes
 
-Vallromanes (Vallès Oriental, Barcelona, Catalonia) in 3D, built from official survey data and rendered in the browser with [three.js](https://threejs.org/), WebGPURenderer and TSL. Explore the municipality on foot, by car, by bicycle or by helicopter: its real terrain, about 2,900 buildings and 4,300 structures with their real heights, floors and roofs, 38 km of streets with their names, stairs, walls, hedges, pools, street lamps and some 130,000 trees in its woods, with cars and people going about, synthesised sound, a map, a list of places to teleport to, and the sun of 41.5° N. The town hall, the church of Sant Vicenç, the two schools and Can Poal have their own look.
+Vallromanes (Vallès Oriental, Barcelona, Catalonia) in 3D, built from official survey data and rendered in the browser with [three.js](https://threejs.org/), WebGPURenderer and TSL. Explore the municipality on foot, by car, by bicycle or by helicopter: its real terrain, about 2,900 buildings and 4,300 structures with their real heights, floors and roofs, 38 km of streets with their names, stairs, walls, hedges, pools, street lamps and some 130,000 trees in its woods, with cars and people going about, synthesised sound, a map, a list of places to teleport to, and the sun of 41.5° N. The town hall, the church of Sant Vicenç, the two schools and Can Poal have their own look, and about twenty shops, bars and restaurants carry their sign.
 
 It is a fork of [mrdoob/slop-newyork](https://github.com/mrdoob/slop-newyork): the rendering, lighting, camera, controllers and post-processing come from there, and the town is baked offline from open data instead of generated.
 
@@ -34,6 +34,7 @@ npm test
 - Urban topographic map 1:1000 (buildings, streets, walls, stairs, trees, lamps, labels): © Diputació de Barcelona, Cartografia topogràfica urbana 1:1000. Its terms allow publishing the data derived from it, with this credit.
 - LiDAR terrain and surface models, and the municipal boundary (Divisions administratives): © Institut Cartogràfic i Geològic de Catalunya (ICGC), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 - Building floors, use and year of construction: © Dirección General del Catastro, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+- Shop names and positions: the council's business directory, with places from © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright) (ODbL) and map sites.
 - Road attributes (one-way, lanes, speed limits, some names): © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright) (ODbL).
 
 The look of the town hall, the Escola Tres Pins, the Escola Bressol, Can Poal and the church tower was modelled from photographs on [Wikimedia Commons](https://commons.wikimedia.org/wiki/Category:Buildings_in_Vallromanes) and the municipality's website; the photographs are not part of this repository.
