@@ -15,7 +15,7 @@ const LAMP_RANGE = 110; // m from the camera within which lamps may light up
 const LAMP_INTENSITY = 30; // as the upstream street lights (street-details.js)
 const SPECIES_WEIGHTS = [0.4, 0.3, 0.3]; // plane, locust, elm: the species the tree field has
 // Garden trees are smaller and sparser than Manhattan's street trees: closer detail levels, and the shortest visibility tier
-const TREE_LOD = { near: 45, mid: 170 };
+const TREE_LOD = { near: 45, mid: 170, shadowLevels: 2 }; // the whole-crown cards beyond 170 m cast no shadow
 const TREE_TIER = 2;
 
 // A unit-radius cylinder or box placed in a part's own frame, merged into one geometry

@@ -55,8 +55,17 @@ export async function initTown() {
   const loadingOverlay = document.getElementById('loading-overlay');
   const loadingStatus = document.getElementById('loading-status');
   const setStatus = (text) => { if (loadingStatus) loadingStatus.textContent = text; };
+  // The loading bar fills as the stages finish (the page was drawn with an indeterminate sweep until now)
+  const loadingBar = document.getElementById('loading-progress');
+  if (loadingBar) loadingBar.parentElement.classList.remove('is-indeterminate');
+  const setProgress = (fraction, text) => {
+    if (loadingBar) loadingBar.style.transform = `scaleX(${Math.min(1, fraction).toFixed(3)})`;
+    if (text) setStatus(text);
+  };
+  // lets the browser paint the bar between two long synchronous stages
+  const paint = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-  setStatus('Initializing Three.js WebGPURenderer...');
+  setProgress(0.03, 'Initializing Three.js WebGPURenderer...');
   const renderer = new THREE.WebGPURenderer({ antialias: true, powerPreference: 'high-performance', reversedDepthBuffer: true });
   renderer.setPixelRatio(1.0);
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -71,15 +80,25 @@ export async function initTown() {
   const scene = new THREE.Scene();
   const lightingSystem = new LightingSystem(scene, renderer);
 
-  setStatus('Loading the terrain, buildings and streets of Vallromanes...');
+  setProgress(0.08, 'Loading the terrain, buildings and streets of Vallromanes...');
+  let loaded = 0;
+  const DATA_FILES = 9;
+  const tick = (promise) => promise.then((result) => {
+    loaded++;
+    setProgress(0.08 + (0.4 * loaded) / DATA_FILES, `Loading the data of Vallromanes (${loaded} of ${DATA_FILES})...`);
+    return result;
+  });
   const [{ sampler, frame }, boundary, { structures }, roads, featureData, stairData, { props: propData }, labels, canopy] = await Promise.all([
-    loadTerrain('./data/'), loadBoundary('./data/'), loadBuildings('./data/'), loadRoads('./data/'), loadFeatures('./data/'),
-    loadStairs('./data/'), loadProps('./data/'), loadLabels('./data/'), loadCanopy('./data/')
+    tick(loadTerrain('./data/')), tick(loadBoundary('./data/')), tick(loadBuildings('./data/')), tick(loadRoads('./data/')), tick(loadFeatures('./data/')),
+    tick(loadStairs('./data/')), tick(loadProps('./data/')), tick(loadLabels('./data/')), tick(loadCanopy('./data/'))
   ]);
-  setStatus('Building the town...');
+  setProgress(0.5, 'Building the town...');
+  await paint();
   const terrain = buildTerrain(scene, sampler, { material: createTerrainMaterial({ canopy: canopyTexture(canopy) }) });
   const buildings = buildBuildings(scene, structures);
   const streets = buildStreets(scene, roads);
+  setProgress(0.6, 'Building the town...');
+  await paint();
   const roadIndex = createRoadIndex(roads, streets.trims);
   const features = buildFeatures(scene, { lines: featureData.lines, water: featureData.water, flights: stairData.flights }, sampler.heightAt, { roadIndex });
   const stairIndex = createStairIndex(stairData.flights);
@@ -106,6 +125,8 @@ export async function initTown() {
     confine: (x, z) => confineToRing(boundary.rings[0], x, z, EDGE_MARGIN)
   };
 
+  setProgress(0.7, 'Planting the woods...');
+  await paint();
   // The woods: instanced trees where the canopy grid is tall, not on streets and not where the survey has its own trees
   const woodland = flags.has('nowoods') ? null : buildWoodland(scene, canopy, {
     ground: sampler.heightAt, surveyed: propData.tree.filter((_, i) => i % 3 !== 2),
@@ -441,7 +462,8 @@ export async function initTown() {
   renderPipeline.render();
   scene.visible = true;
   // Then compile the materials the way the scene pass will use them (its target and MRT)
-  setStatus('Compiling shaders...');
+  setProgress(0.85, 'Compiling shaders...');
+  await paint();
   terrain.update(cameraSystem.camera.position);
   renderer.setRenderTarget(scenePass.renderTarget);
   renderer.setMRT(sceneMRT);
@@ -453,7 +475,7 @@ export async function initTown() {
   renderer.setMRT(null);
   renderer.setRenderTarget(null);
 
-  setStatus('Rendering...');
+  setProgress(1, 'Rendering...');
   let lastTime = performance.now();
   let elapsed = 0, frameCount = 0, fpsTimer = 0, framesDrawn = 0, nextSave = 0;
   renderer.setAnimationLoop((now) => {

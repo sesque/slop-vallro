@@ -176,9 +176,15 @@ facade detail yet); about 2.5 M triangles in a typical view at 90 to 120 fps in 
       from Catastro footprints, forest and farmland from RTT/LiDAR with instanced woodland, at lower detail.
 
 ## Phase 9 — Performance, polish and release
-- [ ] Chunk culling and shadow proxies through `scene-culling.js`; terrain LOD tuning; check draw call and
-      triangle budgets.
-- [ ] Load size under 10 MB gzipped; a loading progress bar for the data fetches.
+- [x] Triangle budget: a frame in the village was about 5.0 M triangles over all passes (3 shadow cascades and the view), 2.2 M of them
+      woodland trees and 1.7 M survey trees. Far trees (the whole-crown cards, and for the woods also the coarse level) no longer cast shadows
+      (`shadowLevels` in `createTreeField`): 5.0 M -> 3.0 M in the village, 3.4 M in the thick of the woods, 120 fps on the development Mac, no GPU errors.
+- [ ] Chunk culling and shadow proxies through `scene-culling.js`; terrain LOD tuning (not started: the budget is met on this machine; test on weaker
+      hardware first).
+- [x] Load size: data 5.40 MB gzipped (terrain.bin 3.05, features.bin 0.86, canopy.bin 0.67, the rest 0.8), our JS 0.19 MB, three.js (three.webgpu,
+      three.core, three.tsl from jsDelivr) 0.76 MB, Inter and Overpass from Google Fonts: about 6.4 MB in all, under the 10 MB gate. Locally the page is
+      ready in 1.3 s.
+- [x] A determinate loading bar: it fills as the nine data files arrive and the town is built, then shaders compile (`setProgress` in `js/town.js`).
 - [ ] README with attribution (spec §9); screenshots; GitHub Pages deploy (if the licences allow).
 - [ ] Final quality-gate pass (spec §8).
 

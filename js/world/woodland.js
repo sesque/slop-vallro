@@ -7,7 +7,7 @@ import { createTreeField } from '../trees.js';
 
 export const TREE_MIN = 4.5; // m of vegetation height from which a cell is woodland
 const CELL_SHARE = 0.3; // one tree per about 55 m2 of woodland (cells are 4 m, crowns 6-8 m)
-export const WOODLAND_LOD = { near: 55, mid: 190, maxDist: 520 };
+export const WOODLAND_LOD = { near: 55, mid: 190, maxDist: 520, shadowLevels: 1 }; // only the full-detail trees cast shadows
 const SPECIES_WEIGHTS = [0.4, 0.3, 0.3]; // plane, locust, elm: the species the tree field has
 
 function hash(a, b, salt = 0) {

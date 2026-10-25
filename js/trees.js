@@ -826,10 +826,11 @@ function hashPos(x, y, z) {
  * Builds the instanced tree field for `sites` ({ x, y, z, scale, species, yaw?, sx?, sz?, tier? }) and keeps each
  * tree's level of detail up to date from the camera of every view pass (scene.onBeforeRender). `near` and `mid` are the
  * distances (m) of the full-detail and the coarse levels (the defaults suit big street trees); `maxDist` hides every tree
- * beyond that distance whatever its tier. Returns
+ * beyond that distance whatever its tier; only the levels below `shadowLevels` (0 full detail .. 2 whole-crown cards) cast shadows, as
+ * far trees' shadows are too small to see and cost a lot in every shadow cascade. Returns
  * { group, material, atlas, update(cameraPosition) }.
  */
-function createTreeField(scene, sites, { near = LOD_NEAR, mid = LOD_MID, maxDist = null } = {}) {
+function createTreeField(scene, sites, { near = LOD_NEAR, mid = LOD_MID, maxDist = null, shadowLevels = 3 } = {}) {
   const group = new THREE.Group();
   group.name = 'Trees';
   const atlas = createLeafAtlas();
@@ -852,18 +853,18 @@ function createTreeField(scene, sites, { near = LOD_NEAR, mid = LOD_MID, maxDist
 
   // Shared geometry types: lod 0 & 1 per species & variant, lod 2 per species
   const types = [];
-  const makeType = (geo, name) => {
+  const makeType = (geo, name, level) => {
     const height = Math.max(Math.abs(geo.boundingBox.min.y), Math.abs(geo.boundingBox.max.y));
     // The material adds wind after the instance transform: height-squared lean/rock, plus bob and flutter.
     const windPadding = Math.hypot(0.2, 0.06) * Math.hypot(0.86, 0.51) * (height / 11) ** 2 + 2;
-    const type = { geo, name, windPadding, meshes: [] };
+    const type = { geo, name, level, windPadding, meshes: [] };
     types.push(type);
     return type;
   };
   const meshIndex = SPECIES.map((sp, s) => ({
-    l0: [0, 1].map((v) => makeType(geos[s][v][0], `Trees_${sp.name}_v${v}_lod0`)),
-    l1: [0, 1].map((v) => makeType(geos[s][v][1], `Trees_${sp.name}_v${v}_lod1`)),
-    l2: makeType(geos[s][0][2], `Trees_${sp.name}_lod2`)
+    l0: [0, 1].map((v) => makeType(geos[s][v][0], `Trees_${sp.name}_v${v}_lod0`, 0)),
+    l1: [0, 1].map((v) => makeType(geos[s][v][1], `Trees_${sp.name}_v${v}_lod1`, 1)),
+    l2: makeType(geos[s][0][2], `Trees_${sp.name}_lod2`, 2)
   }));
   const cells = new Map();
   const meshes = [];
@@ -932,7 +933,7 @@ function createTreeField(scene, sites, { near = LOD_NEAR, mid = LOD_MID, maxDist
     mesh.name = m.name;
     mesh.count = 0;
     mesh.visible = false;
-    mesh.castShadow = true;
+    mesh.castShadow = m.type.level < shadowLevels;
     mesh.receiveShadow = true;
     m.cell.group.add(mesh);
     m.type.meshes.push(mesh);
