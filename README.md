@@ -27,13 +27,13 @@ npm run geodata     # boundary, roads, stairs, terrain, buildings, features, pro
 npm test
 ```
 
-`node tools/vallromanes/fetch-icgc-dtm.mjs` downloads the LiDAR terrain and surface models for the municipality (run it with `--product dsm --level 0` for the surface model, which gives the woods and the roof shapes), `fetch-osm.mjs` the OpenStreetMap highways, and the Catastro building file for 08297 is downloaded by hand into `tools/data/vallromanes/raw/catastro/` (see `knowledge.md` §3.10). [CLAUDE.md](CLAUDE.md), [spec.md](spec.md), [plan.md](plan.md) and [knowledge.md](knowledge.md) describe the design, the data and what has been measured.
+`node tools/vallromanes/fetch-icgc-dtm.mjs` downloads the LiDAR terrain and surface models for the municipality (run it with `--product dsm --level 0` for the surface model, which gives the woods and the roof shapes), `fetch-osm.mjs` the OpenStreetMap highways, and the Catastro facade photos are fetched by `python tools/vallromanes/catastro-photos/pipeline.py all` run inside a `walls-cadastro/` folder (conda: geopandas, pyogrio, requests; not committed, 322 MB) and classed by hand into `tools/data/vallromanes/overrides/facade-palette.json`, which `npm run geodata` reads. The Catastro building file for 08297 is downloaded by hand into `tools/data/vallromanes/raw/catastro/` (see `knowledge.md` §3.10). [CLAUDE.md](CLAUDE.md), [spec.md](spec.md), [plan.md](plan.md) and [knowledge.md](knowledge.md) describe the design, the data and what has been measured.
 
 ## Data and credits
 
 - Urban topographic map 1:1000 (buildings, streets, walls, stairs, trees, lamps, labels): © Diputació de Barcelona, Cartografia topogràfica urbana 1:1000. Its terms allow publishing the data derived from it, with this credit.
 - LiDAR terrain and surface models, and the municipal boundary (Divisions administratives): © Institut Cartogràfic i Geològic de Catalunya (ICGC), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-- Building floors, use and year of construction: © Dirección General del Catastro, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+- Building floors, use and year of construction: © Dirección General del Catastro, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The wall colours come from the Catastro facade photographs, which were looked at to class each building; only the classes are published, not the photographs.
 - Shop names and positions: the council's business directory, with places from © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright) (ODbL) and map sites.
 - Road attributes (one-way, lanes, speed limits, some names): © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright) (ODbL).
 

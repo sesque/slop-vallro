@@ -235,3 +235,11 @@ facade detail yet); about 2.5 M triangles in a typical view at 90 to 120 fps in 
 - [x] Walkers no longer jump or spin: the corners of the pavement graph are now short links that are walked (before, a walker was moved up to 17.8 m in one step
       from the end of one pavement to the start of the next), position and heading are eased (at most 2.6 m/s and 5 rad/s), and a walker stops before turning
       round or turns back instead of crossing under a car after a long wait. Longest step 0.26 m per 0.1 s, sharpest turn 0.5 rad, over 20 simulated minutes of 100 walkers.
+
+## Phase 12 — Wall colours from the Catastro photos (branch `feature/wall-textures`, on top of v1.0.0)
+- [x] Examined `walls-cadastro/` (952 Catastro facade photos, output of `tools/vallromanes/catastro-photos/pipeline.py`) and reported feasibility: a palette per building, not textures; 20 % of photos show a facade.
+- [x] Classed the 952 photos by eye (w c o p t b g s d, or x) -> `tools/data/vallromanes/overrides/facade-palette.json` (216 entries).
+- [x] `facade-palette.mjs` (own photo, else nearest classed building within 40 m), the Catastro reference kept by `catastro.mjs`, `pal` baked into `data/buildings.json`, carried in `info.z`, decoded by the facade shader
+      (class colours, brick and stone patterns); tests (247 pass); spec §5.10 and knowledge §3.11 describe it. Checked in Chrome; Safari check by hand.
+- [x] Evaluated Google Maps screenshots (2D and oblique) as a second source: alignment on the street network and the camera from feature matching work, wall colours do not (knowledge §3.11). Shelved; scripts kept in
+      `tools/vallromanes/experiments/`, the images are not committed.

@@ -1,3 +1,12 @@
 .DS_Store
 tools/data/vallromanes/raw/
 node_modules/
+
+# Catastro facade photos and their pipeline (322 MB, third-party; only derived palette indexes are baked)
+walls-cadastro/
+
+# Google Maps screenshots and the capture browser profile (third-party imagery, used only for a shelved experiment)
+screenshots/
+top_view/
+perspective/
+maps_profile/

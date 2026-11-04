@@ -40,7 +40,7 @@ test('parseParts reads floors and the centroid in the local frame', () => {
 test('a footprint takes the most floors of the parts inside it and the use and year of their building', () => {
   const idx = makeIndex(parseBuildings(building('A1', '3_industrial', 1975)), parseParts(part('A1', 1, 1, 100, 50) + part('A1', 2, 3, 100, 50)));
   const footprint = [Float32Array.from([98, 48, 112, 48, 112, 62, 98, 62])];
-  assert.deepEqual(idx.lookup(footprint), { floors: 3, use: USE.INDUSTRIAL, year: 1975, parts: 2 });
+  assert.deepEqual(idx.lookup(footprint), { floors: 3, use: USE.INDUSTRIAL, year: 1975, parts: 2, ref: 'A1' });
   assert.equal(idx.lookup([Float32Array.from([0, 0, 5, 0, 5, 5, 0, 5])]), null, 'no part inside: no join');
 });
 

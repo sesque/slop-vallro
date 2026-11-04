@@ -61,7 +61,7 @@ export async function loadBuildings(baseUrl = './data/', fetchImpl = globalThis.
       return ring;
     });
     return { id: b.id, kind: b.kind, kindName: kind.name, open: kind.open, base: b.base, baseMax: b.baseMax, top: b.top,
-      floors: b.floors, roof: b.roof, rise: b.rise, flags: b.flags, cat: b.cat || 0, use: b.use || 0, year: b.year || 0, tower: b.tower || null, look: b.look || 0, chimney: b.chimney || 0, rings };
+      floors: b.floors, roof: b.roof, rise: b.rise, flags: b.flags, cat: b.cat || 0, use: b.use || 0, year: b.year || 0, tower: b.tower || null, look: b.look || 0, chimney: b.chimney || 0, pal: b.pal || 0, rings };
   });
   return { meta, structures };
 }

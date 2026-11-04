@@ -57,11 +57,15 @@ slop-vallro/
 │  └─ world/             builders: terrain, buildings (+building-geometry), streets (+street-geometry), features
 │                         (+feature-geometry), props, woodland, trunks, signs (+sign-geometry)
 ├─ data/                 GENERATED and committed (about 5.4 MB gzipped): see §6
-├─ tools/vallromanes/    the pipeline: build-*.mjs, fetch-*.mjs, read-bue, catastro, lidar-roofs, utm, osm-match, ...
+├─ tools/vallromanes/    the pipeline: build-*.mjs, fetch-*.mjs, read-bue, catastro, facade-palette, lidar-roofs, utm, osm-match, ...
+│  ├─ catastro-photos/   pipeline.py: downloads the Catastro facade photos (run by hand, not part of `npm run geodata`)
+│  └─ experiments/       shelved: registration of Google Maps screenshots and wall-colour sampling (see knowledge.md §3.11)
 ├─ tools/data/vallromanes/
 │  ├─ raw/               NOT committed: BUE shapefiles, ICGC DTM/DSM windows, boundary, OSM, Catastro GML
-│  └─ overrides/         committed: roads.json (manual street fixes), shops.json (the shop directory with places)
-├─ tests/                34 files, 244 node:test tests (pipeline, runtime geometry, simulations)
+│  └─ overrides/         committed: roads.json (manual street fixes), shops.json (the shop directory with places),
+│                         facade-palette.json (Catastro building reference -> facade class letter, 216 entries)
+├─ walls-cadastro/       NOT committed (322 MB, in .gitignore): the output of tools/vallromanes/catastro-photos/pipeline.py (photos, vectors, CSV)
+├─ tests/                35 files, 247 node:test tests (pipeline, runtime geometry, simulations)
 └─ CLAUDE.md spec.md plan.md knowledge.md report.md README.md
 ```
 
@@ -78,6 +82,7 @@ The upstream New York modules (`city-grid`, `boroughs`, `landmarks`, `road-netwo
 | ICGC Divisions administratives v2r2 | `build-boundary.mjs` | The municipal polygon: hard edge, terrain clip, map frame |
 | OpenStreetMap (Overpass, ODbL) | `fetch-osm.mjs`, `osm-match.mjs`, `fetch-osm-pois.mjs` | One-way, lanes, speed limits and some street names; named shops and restaurants with coordinates |
 | Catastro INSPIRE Buildings 08297 (CC BY 4.0) | `catastro.mjs` | Real floors above ground, use and year of construction |
+| Catastro facade photos (`OVCFotoFachada`, via `walls-cadastro/pipeline.py`) | classed by eye into `overrides/facade-palette.json`, then `facade-palette.mjs` | The wall colour or material of 1 241 buildings (own photo or nearest classed building); the photos are not published |
 | Council business directory (image) + Google Maps markers | `overrides/shops.json`, `build-shops.mjs` | The 19 shop signs: names, sectors, positions |
 | Photographs on Wikimedia Commons and the council site | `LANDMARKS` in `build-buildings.mjs`, `js/world/buildings.js` | The look of five landmarks (reference only, not copied) |
 | Upstream slop-newyork | `js/` | The rendering engine, lighting, cameras, controllers, models, audio synthesis |
@@ -129,6 +134,7 @@ Validation gate: DTM against BUE spot heights, median |Δ| 0.14 m, P95 0.70 m (g
 - **Roofs.** Types FLAT 0, HIP 1, GABLE 2, GABLE_SHORT 3, with `rise` (eave to ridge). The eave sits 55 % of `rise` below `top`, the ridge 45 % above.
 - **Catastro join** (`catastro.mjs`): the GML is read with patterns. Parts are matched to footprints by centroid; the footprint takes the most floors above
   ground of its parts and the use and year of their building. 1 948 structures joined, floors changed in 841. Fields `floors`, `cat`, `use` (0 unknown … 6 other), `year`.
+- **Facade class** (`facade-palette.mjs`, §5.10): the join also keeps the cadastral reference of the owning building, which is the file name of its Catastro facade photo.
 - **Landmarks** (`LANDMARKS`, `LOOK`): five footprints get a `look` (1 town hall, 2 school, 3 masia, 4 church nave, 5 nursery); the church also gets `tower [x, z, size, top]`
   from the LiDAR spike beside its nave, the masia a `chimney`, the town hall a shallow tile roof override.
 - Output `data/buildings.json` (610 kB; records with kind, base, baseMax, top, floors, roof, rise, flags, look, tower, use, year, ring offsets) and `buildings.bin` (rings).
@@ -146,6 +152,20 @@ DSM − DTM with the building footprints removed, averaged into **4 m cells**, 0
 `build-labels.mjs`: 104 street names (with angle and length for the map), 846 house numbers (attached to buildings), 178 places, 29 teleports. `build-shops.mjs`: for each entry of
 `overrides/shops.json` resolve a point (a survey place, degrees, or street + house number; a missing number is estimated between its neighbours on the same side), find the building (containing, else nearest within
 20 m), pick the wall facing the street, put the sign 3.1 m above the pavement, centred on the anchor and spread when several share a wall → `data/shops.json` (19 signs).
+
+### 5.10 facade palette (`facade-palette.mjs`, run inside `build-buildings.mjs`)
+1. **Photos.** `tools/vallromanes/catastro-photos/pipeline.py` (run by hand from `walls-cadastro/`, needs geopandas, pyogrio, requests) downloads the Catastro INSPIRE buildings and addresses and the OSM streets (`vectors`),
+   then the facade photo of every parcel from the Catastro web service `OVCFotoFachada` at one request per second, resumable (`photos`), and joins everything into `output/vallromanes.gpkg` and `output/buildings.csv`
+   (`link`). Result: 991 parcels, 952 photos (851 at 1215 x 911 px), 39 without photo. The photo's file name is the 14-character cadastral reference, which is also the `Building` id of the Catastro GML. All of it lives in
+   `walls-cadastro/`, which is not committed (322 MB, third-party photographs).
+2. **Classing.** The photos are street-level views of a parcel frontage: sky, road, garden walls and trees, and the house is often small or hidden. A first automatic colour extraction was unreliable (it averaged road, sky and
+   vegetation), so each of the 952 photos was classed by eye from contact sheets with one letter: `w c o p t b g s d` (the nine classes above) or `x` for no usable facade. 216 photos have a class (w 86, c 38, t 29, b 19, o 15, g 13,
+   s 9, d 4, p 3), 736 do not. The result is `tools/data/vallromanes/overrides/facade-palette.json`: `{ cadastral reference: letter }`, 216 entries, the only thing derived from the photos that is committed.
+3. **Assignment.** `catastro.lookup` now also returns the owning reference. `assignPalette(items, labels)` gives a building its own photo's class; else the class of the nearest classed building within 40 m (`NEIGHBOUR_M`, 40 m grid
+   index, ties by order); else 0. Only buildings and outbuildings joined to the Catastro (kinds 0 and 1) take part. The bake stores `pal` in `data/buildings.json` (omitted when 0) and prints how many were own, inherited and unclassed:
+   341 own, 1 358 inherited (including sheds), 1 241 of the 2 906 buildings and 1 523 of the 3 742 buildings and sheds end with a class.
+4. **Runtime.** `loadBuildings` passes `pal` through, `appendStructure` encodes it in `info.z`, the facade shader decodes it (§7, Buildings).
+Tests: `tests/facade-palette.test.mjs` (class numbering, own / neighbour / none, seed encoding round trip).
 
 ## 6. Runtime data files
 
@@ -174,6 +194,11 @@ the world position and the normal (grass, dry grass, soil, rock by slope and hei
 flat roofs (gravel), hip and gable roofs (tile courses along the contours, sheet metal for farm and industry), vertical gable ends, porches and canopies as slabs, ruins as low walls, bell tower and chimney.
 One facade material reads per-vertex `info = (rows, surface, colour seed, kind + style/32)`: plaster palette, window grid (bays 3.4 m, 2.7 m for pre-1950 houses), plinth stone, era tint (pre-1950 warmer, 1990+ whiter),
 use (plain concrete for farm and industry, light for shops and public), and the landmark looks (brick and pink stone, yellow and grey metal, rubble stone, whitewash, pale blue, ashlar). At night some windows are lit.
+
+**Facade class from the Catastro photos** (§5.10 has the pipeline). Each building may carry a `pal` class 1..9 (1 white, 2 cream, 3 ochre, 4 pink, 5 terracotta, 6 brick, 7 grey, 8 stone, 9 dark cladding; 0 none).
+It rides in the integer part of the colour seed in `info.z` (`encodeSeed` in `building-geometry.js`: `pal + 0.01 + 0.98 * hash`, so interpolation cannot tip the integer part); the shader decodes `pal = floor(info.z)` and
+`seed = (info.z - pal - 0.01) / 0.98`, so window and bay hashing is unchanged and no vertex attribute was added (this keeps the shader small for Safari). A class replaces the seeded plaster colour with the class colour (light and dark
+varying slightly per house) and switches off the era tint; brick (class 6) and stone (class 8) draw a running-bond brick or a rubble pattern from the facade UV. Landmark looks and the farm/industry/retail use colours still override it.
 
 **Streets** (`world/streets.js`, `street-geometry.js`): ribbons along each edge from `halfL/halfR` and the smooth profile, kerbs, pavements (stopping 0.4 m beyond the half-width of the widest street at a junction),
 centre lines, junction discs. **Features** (`world/features.js`): walls, hedges, fences, stairs (steps from the tread heights), water, bridges; wall colliders. **Props** (`world/props.js`): instanced lamps (night light pool),
@@ -227,7 +252,7 @@ engines (distance, stereo, Doppler, buildings in the way), crashes. About 0.2 s 
 
 ## 10. Tests
 
-244 `node:test` tests in 34 files: the pipeline stages with tiny fixtures (read, boundary, roads, OSM matching, stairs, terrain, buildings, canopy, LiDAR roofs, Catastro, features, props, labels, shops),
+247 `node:test` tests in 35 files: the pipeline stages with tiny fixtures (read, boundary, roads, OSM matching, stairs, terrain, buildings, canopy, LiDAR roofs, Catastro, features, props, labels, shops),
 the runtime geometry (terrain mesh, building and street geometry, gable roofs, towers, signs), the samplers and indexes, the lane and pavement graphs, a 30-minute no-deadlock run of traffic at three places,
 the walkers' step and turn limits, collisions of trunks, and the page's import graph against the preload list. `tests/helpers/module.cjs` runs upstream CommonJS-style modules under a `vm` with import stubs.
 
@@ -237,6 +262,7 @@ the walkers' step and turn limits, collisions of trunks, and the page's import g
 - Woodland uses the three upstream species (plane, locust, elm) for pines and oaks.
 - Traffic cars are not pushed when hit; walkers do not avoid the player or each other; no buses.
 - The sound has not been tuned by ear; no birds, bells or horns in the game.
+- **Wall colours are approximate.** Only a fifth of the photos show a facade, the class is read by eye, and about 57 % of the buildings inherit it from a neighbour up to 40 m away or have none, so a building can wear a neighbour's colour. The photos' reuse terms are unknown, which is why only the class letters are published.
 - Landmarks beyond the five are generic buildings; the CAP, the Casal and most masies have no reference photos.
 - Safari and Chrome were tested by hand on the final build; there are no automated browser tests.
 

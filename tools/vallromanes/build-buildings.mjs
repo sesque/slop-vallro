@@ -12,6 +12,7 @@ import { loadTerrain } from '../../js/geo/load-geodata.js';
 import { fsFetch } from './fs-fetch.mjs';
 import { roofStats, roofShape, findSpike, loadDsm } from './lidar-roofs.mjs';
 import { loadCatastro } from './catastro.mjs';
+import { assignPalette } from './facade-palette.mjs';
 import { centroid, orientedBox, pointInRings, reverseRing, signedArea, simplifyRing } from '../../js/geo/polygon.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -149,8 +150,9 @@ export function refineWithLidar(d, roof, st, kindIndex, open, baseMean, shape = 
   return out;
 }
 
-export function buildBuildings(features, ground, boundaryRings, lidar = null, catastro = null) {
+export function buildBuildings(features, ground, boundaryRings, lidar = null, catastro = null, facades = {}) {
   const records = [];
+  const owners = []; // per record: footprint centroid and the cadastral reference of its building, for the facade palette
   const rings = [];
   let ringVerts = 0;
   const dropped = { degenerate: 0, outside: 0 };
@@ -218,6 +220,7 @@ export function buildBuildings(features, ground, boundaryRings, lidar = null, ca
     let id = stableId(f.cas, cm.flat());
     while (ids.has(id)) id = stableId(id, [ids.size]); // vanishingly rare; keep ids unique
     ids.add(id);
+    owners.push({ x: cx, z: cz, ref: kindIndex <= 1 && cat ? cat.ref : null });
     records.push({
       id, kind: kindIndex,
       base: +d.base.toFixed(2), baseMax: +d.baseMax.toFixed(2), top: +d.top.toFixed(2),
@@ -231,10 +234,12 @@ export function buildBuildings(features, ground, boundaryRings, lidar = null, ca
     ringVerts += allRings.reduce((s, r) => s + r.length / 2, 0);
     for (const r of cm) rings.push(Int32Array.from(r));
   }
+  const facade = assignPalette(owners, facades);
+  records.forEach((r, i) => { if (facade.pal[i] && r.kind <= 1) r.pal = facade.pal[i]; });
   const bin = new Int32Array(ringVerts * 2);
   let o = 0;
   for (const r of rings) { bin.set(r, o); o += r.length; }
-  return { records, bin, dropped, seen, lidarCount, catCount, landmarkCount };
+  return { records, bin, dropped, seen, lidarCount, catCount, landmarkCount, facade };
 }
 
 async function main() {
@@ -248,7 +253,9 @@ async function main() {
   console.log(lidar ? 'LiDAR DSM found: roofs and tops are checked against it' : 'No LiDAR DSM (fetch-icgc-dtm.mjs --product dsm --level 0): BUE tops only');
   const catastro = loadCatastro(path.join(RAW, 'catastro'));
   console.log(catastro ? `Catastro found: ${catastro.buildings} buildings, ${catastro.parts} parts` : 'No Catastro files (raw/catastro): BUE floors only');
-  const { records, bin, dropped, seen, lidarCount, catCount, landmarkCount } = buildBuildings(features, ground, boundary.rings, lidar, catastro);
+  const facades = JSON.parse(fs.readFileSync(path.join(root, 'tools/data/vallromanes/overrides/facade-palette.json'), 'utf8'));
+  const { records, bin, dropped, seen, lidarCount, catCount, landmarkCount, facade } = buildBuildings(features, ground, boundary.rings, lidar, catastro, facades);
+  console.log(`Facade palette: ${facade.own} from their own photo, ${facade.inherited} from the nearest classed building, ${facade.none} unclassed`);
   console.log(`Landmarks: ${landmarkCount.found.join(', ') || 'none'}; ${landmarkCount.towers} bell tower from the LiDAR`);
   if (catastro) console.log(`Catastro: ${catCount.joined} structures joined, floors changed in ${catCount.floorsChanged}`);
   if (lidar) console.log(`LiDAR: ${lidarCount.topReplaced} tops replaced by the roof level, ${lidarCount.flattened} hip roofs made flat, ${lidarCount.gables} gable roofs, ${lidarCount.riseSet} hip rises set from the relief, ${lidarCount.noPixels} buildings without enough pixels`);

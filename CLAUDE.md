@@ -23,7 +23,8 @@ Read these before working:
   the BUE 1:1000. The BUE is the high-detail core; the rest (forest, farmland, Serralada de Marina slopes) comes
   from the ICGC DTM, RTT and OSM at lower detail. The municipal boundary polygon defines the playable extent and is a **hard edge** (player, vehicles and
   traffic cannot cross it; the terrain just beyond it is only a visual skirt).
-- Raw source data lives in `tools/data/vallromanes/raw/` and is **not committed** (licence and size). Generated
+- Raw source data lives in `tools/data/vallromanes/raw/` and is **not committed** (licence and size). The same goes for `walls-cadastro/` (Catastro facade photos and the vectors made by
+  `tools/vallromanes/catastro-photos/pipeline.py`) and for Google Maps screenshots: only `overrides/facade-palette.json` (class letters) is committed. Generated
   runtime data lives in `data/` and **is** committed.
 - The world frame is metres in a local frame derived from EPSG:25831 (ETRS89 / UTM 31N). Never mix in
   lat/lon at runtime.

@@ -61,7 +61,7 @@ const CELL = 16;
 
 /**
  * An index over parts and buildings. `lookup(rings)` takes a footprint ([outer, ...holes] flat [x, z, ...]) and returns
- * { floors (the most floors of its parts), use, year } from the parts whose centroid lies inside it, or null.
+ * { floors (the most floors of its parts), use, year, ref (the cadastral reference of that part's building) } from the parts whose centroid lies inside it, or null.
  */
 export function makeIndex(buildings, parts) {
   const cells = new Map();
@@ -86,7 +86,7 @@ export function makeIndex(buildings, parts) {
     }
     if (!count) return null;
     const b = buildings.get(owner) || { use: USE.UNKNOWN, year: 0 };
-    return { floors, use: b.use, year: b.year, parts: count };
+    return { floors, use: b.use, year: b.year, parts: count, ref: owner };
   }
   return { lookup, buildings: buildings.size, parts: parts.length };
 }

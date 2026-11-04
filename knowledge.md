@@ -201,12 +201,31 @@ index contour labels 331.
 - **The BUE `floors` field overcounts:** it equals the Catastro maximum in 1 242 of 2 195 matches; in 413 BUE says 2 where Catastro says 1, and in 245 it says 3 where Catastro says 2. Catastro floors should replace it.
 - **Flagged buildings:** only 86 of the 313 BURIED-flagged structures have Catastro floors, so Catastro does not fix the 4.3 % flag rate; the LiDAR roof level can.
 
+### 3.11 Facade photos and aerial screenshots for wall colours (measured, 2026-11)
+- **Catastro facade photos.** `tools/vallromanes/catastro-photos/pipeline.py` (run by the project owner, output in `walls-cadastro/`, 322 MB, not committed) fetched the Catastro INSPIRE Buildings and Addresses, the OSM streets and, from
+  `OVCFotoFachada.svc/RecuperarFotoFachadaGet`, one photo per parcel: 991 parcels, **952 photos**, 39 without. The file name is the cadastral building reference (`rc`, 14 characters), the same as the `Building` gml id;
+  `output/buildings.csv` has rc, use, floors, address, street, photo status, and the building's position in EPSG:25831. Coverage against the model: of 2 906 baked buildings, 1 800 join a Catastro building and 1 752 have a photo; the other
+  1 154 are a median 6 m (P90 23 m) from a photographed building.
+- **What the photos show.** Street-level views of the parcel frontage: sky, road, garden walls, vegetation; the house is often small or hidden. Classed by eye, **216 of 952 show a usable facade**: white 86, cream 38, terracotta 29,
+  brick 19, ochre 15, grey 13, stone 9, dark cladding 4, pink 3. A naive automatic colour average mixed road, sky and plants and was dropped. Reuse terms of the photos are not known: the repository keeps only the class letters.
+- **Aerial screenshots (tried and shelved).** 45 Google Maps screenshots (21 straight-down north-up views in `top_view/`, 21 oblique views in `perspective/`, 3 further) were tried as a source of wall colours. Not committed: Google's terms
+  do not allow extracting data from Maps imagery, so this is a technical test only. Findings:
+  - The Google URL parameters do not give the camera: the centre point was 219 m from where the image was centred. Matching roof colour or house outlines to the footprints did not converge either (many surveyed houses are hidden under trees).
+  - **What worked:** the scale bar of the 2D views is 66 px for 20 m, i.e. 3.28 px/m, and the **street network** locked each 2D view onto the model (road centrelines on road-coloured pixels, rotation about -0.7 degrees, 13 of 21 views covered survey
+    buildings; the others lie outside the 46 % surveyed area). SIFT matching of a 2D view to its oblique twin gave a ground-plane homography with 85 to 180 inliers; a pinhole camera from it (f about 1380 px for 1600 x 1000) projects the
+    footprints and roof outlines onto the houses.
+  - **What did not work:** the wall colours. 805 buildings got a colour, 582 were seen in two or more views, but two views of the same building agreed only a little better than two random buildings (ratio of typical colour differences 0.78;
+    0.69 for walls of 150 px or more, 0.61 for 250 px or more, which is only about 110 to 260 buildings). Brightest-pixel sampling and per-view brightness correction hardly helped; the aerial colours did not relate to the street-photo classes.
+    Walls are only 15 to 40 px tall, the shading is baked into the imagery and most walls here are pale. Not baked. Scripts: `tools/vallromanes/experiments/`.
+
 ## 4. Decisions so far
 - Primary geometry comes from **BUE 1:1000 SHP**. Building floor counts come from **Catastro**. Terrain comes
   from **ICGC 0.5 m DTM** (BUE contours and spot heights used for validation and fill). Road attributes come
   from **OSM** plus manual overrides. Zoning character comes from **POUM** (manual or georeferenced).
 - Use real buildings, not procedural lots. Procedural detail (facades, windows, roofs) is driven by real
   attributes.
+- Wall colour: a class per building read by eye from the Catastro facade photos (palette, not textures), inherited from the nearest
+  classed building within 40 m; aerial screenshots were evaluated and not used (§3.11).
 - Develop with **Claude Code** in a fork of slop-newyork.
 
 ## 5. Open questions

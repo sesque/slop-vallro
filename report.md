@@ -9,7 +9,7 @@ phase-by-phase history.
 - A browser simulation of the whole municipality (10.57 km²): walk, drive, cycle or fly over its terrain, 4 313 structures (2 906 buildings), 38 km of drivable streets
   (70 km of lanes) and 55 km of pavements, 1 411 stair flights, about 190 km of walls, retaining walls, hedges and fences, 16 032 survey trees plus **131 993 woodland trees**, 60 cars and 80 people going about,
   synthesised sound, a map with search and 29 teleports, four times of day.
-- Built in six days (2026-10-20 to 10-25, 65 commits), about 14 000 lines of runtime code, 3 500 of pipeline, 3 800 of tests (244 tests, all passing).
+- Built in six days (2026-10-20 to 10-25, 65 commits), about 14 000 lines of runtime code, 3 500 of pipeline, 3 800 of tests (247 tests, all passing).
 - The download is **6.4 MB gzipped** (data 5.4 MB, code 0.19 MB, three.js 0.76 MB), ready in 1.3 s locally; 120 fps in Chrome and 60 fps in Safari on the development Mac.
 - Everything is baked offline from open data; the runtime fetches nothing from third parties except the pinned three.js and two fonts.
 
@@ -49,6 +49,10 @@ phase-by-phase history.
 18. **A per-tree collider was avoided.** 132 000 colliders would have cost memory and start-up time; a grid of trunk positions with a pooled few near the player does the same job.
 19. **Practical traps.** The preview browser cached old modules across reloads (fixed by serving on a fresh port with no-store); a collapsed preview pane produces thousands of zero-size texture errors that are not real;
     the Catastro server sends an incomplete certificate chain (one download needed `curl -k`, with your agreement).
+20. **Street photos give a wall colour for a fifth of the buildings, and only by hand.** Of 952 Catastro facade photos, 216 show a usable facade; the rest show road, sky, garden walls or trees. An automatic colour average was unreliable, so
+    the photos were classed by eye (nine classes) and the class spreads to the nearest classed building within 40 m: 1 241 of 2 906 buildings carry one.
+21. **Aerial screenshots align well but do not give wall colours.** The streets locked the 2D Google views onto the model (3.28 px/m), and feature matching gave the oblique camera, so footprints land on the houses. The wall colours then
+    sampled from them disagreed from view to view almost as much as random buildings do (0.78 of the random difference; 0.61 for the largest walls), so they were not used. Reuse of that imagery is also not allowed.
 
 ## 3. How each source contributed
 
@@ -59,14 +63,15 @@ phase-by-phase history.
 | **ICGC surface model (DSM)** | Real roof levels, roof shapes, the church tower, and the vegetation height that makes the woods | 413 tops replaced, 446 flat roofs, 209 gables, flags 4.3 % → 0.55 %; canopy grid 0.67 MB → 131 993 trees; 67 % woodland |
 | **ICGC administrative boundary** | The hard edge of the world; terrain clipping; the map frame | 1 104 vertices, 10.57 km² |
 | **OpenStreetMap** | Street direction, lanes, speed limits, some names, and named places for shops | 392 of 624 edges matched; +11 names; 73 named places; positions for 5 of the 19 signs |
-| **Catastro (INSPIRE buildings)** | Real floors, use and year per building, which drive window rows, facade palette and roof material | 991 buildings, 3 636 parts; 1 948 structures joined; floors corrected in 841; use and year for the same |
+| **Catastro (INSPIRE buildings)** | Real floors, use and year per building, which drive window rows, facade palette and roof material | 991 buildings, 3 636 parts; 1 948 structures joined; floors corrected in 841; use and year for the same; its 952 facade photos, classed by eye, give the wall colour or material of 1 241 buildings (own photo or nearest classed neighbour) |
+| **Catastro facade photos** (`OVCFotoFachada`, 952 downloaded) | The wall colour or material of buildings: classed by eye into 216 entries, spread to neighbours | 1 241 of 2 906 buildings; the photos themselves are not published |
 | **Council business directory + Google Maps** | Names, sectors and positions for the shop signs | 19 signs (names from the directory; positions from OSM and map markers, ±10 m) |
 | **Wikimedia Commons and council photographs** | The look of five landmarks (colours, materials, tower) | town hall, Escola Tres Pins, Escola Bressol, Can Poal, Sant Vicenç; photos used as reference only |
 | **Diputació heritage records, Catalunya Romànica** | Facts checked, not geometry: the church dates from 1908 (Pericas), its Romanesque apse | context for the church model |
 | **Upstream slop-newyork** | The engine: rendering, lighting, cameras, controllers, car, person, lamp and tree models, audio synthesis | everything in `js/` marked "kept" in `spec.md` |
 
 **What is not sourced, and so invented or generic:** the three tree species (plane, locust, elm) standing for pines and oaks; car colours and models; the walkers' clothes and builds;
-window grids and plaster palettes (only their use and era vary with data); the sounds (synthesised); the traffic density and routes; the colours and fonts of the shop signs; everything inside buildings
+window grids (only their use and era vary with data); plaster colour is data-driven only where a Catastro photo or a neighbour's gave a class (43 % of buildings); the sounds (synthesised); the traffic density and routes; the colours and fonts of the shop signs; everything inside buildings
 (there are no interiors).
 
 ### Contribution by layer

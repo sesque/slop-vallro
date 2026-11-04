@@ -163,13 +163,21 @@ export function seedOf(id) {
 }
 
 /**
+ * The colour seed carried in info.z: the facade palette class (build-time facade-palette.mjs, 0 none) in the integer part and the
+ * building's hash in the fraction, kept inside [0.01, 0.99] so interpolation across a face cannot tip the integer part.
+ */
+export function encodeSeed(hash, pal = 0) {
+  return pal + 0.01 + 0.98 * hash;
+}
+
+/**
  * Appends one structure to `out`. `s` has { id, open, base, baseMax, top, floors, roof, rise, rings } where `rings`
  * is [outer, ...holes] as flat [x, z, ...] arrays and `kind` is its index into the kinds list (stored in info.w).
  * `s.roof` is 0 flat, 1 hip, 2 gable along the long axis, 3 gable along the short axis; `solidHeight` limits ruins to low walls.
  */
 export function appendStructure(out, s, { ruins = false } = {}) {
   const [outer, ...holes] = s.rings;
-  const seed = seedOf(s.id);
+  const seed = encodeSeed(seedOf(s.id), s.pal || 0);
   const info = (surf, rows = 0) => [rows, surf, seed, s.kind + styleOf(s) / 32];
   const top = ruins ? Math.min(s.top, s.base + RUINS_HEIGHT) : s.top;
 

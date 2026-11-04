@@ -40,7 +40,10 @@ export function createBuildingMaterial() {
   const info = attribute('info', 'vec4');
   const rows = info.x;
   const surf = info.y;
-  const seed = info.z;
+  const pal = floor(info.z); // facade palette class from the Catastro photos (0 none), see encodeSeed
+  const flag = (cond) => cond.select(float(1.0), float(0.0));
+  const seed = info.z.sub(pal).sub(0.01).div(0.98);
+  const hasPal = flag(pal.greaterThan(0.5));
   const kind = floor(info.w);
   // use and era of the building (building-geometry.js styleOf) ride in the fraction of info.w
   const styleCode = floor(fract(info.w).mul(32.0).add(0.5));
@@ -51,7 +54,6 @@ export function createBuildingMaterial() {
   const lm = max(styleCode.sub(23.0), 0.0);
   const isLm = (n) => flag(lm.equal(n));
   const facadeUV = uv();
-  const flag = (cond) => cond.select(float(1.0), float(0.0));
 
   // Window grid: one bay every ~3.4 m, one row per floor
   // older houses have narrower bays
@@ -79,14 +81,29 @@ export function createBuildingMaterial() {
   plaster = palette.equal(3.0).select(color(0xf0ebe3), plaster);
   plaster = palette.equal(4.0).select(color(0xd9b3a1), plaster);
   plaster = palette.equal(5.0).select(color(0xbdb8ac), plaster);
+  // Facade class read by eye from the Catastro photos (facade-palette.mjs): 1 white, 2 cream, 3 ochre, 4 pink, 5 terracotta, 6 brick,
+  // 7 grey, 8 stone, 9 dark cladding. Rendered classes tint the plaster; brick and stone get a pattern; a little light and dark per house.
+  let classed = color(0xf1ede4);
+  classed = pal.equal(2.0).select(color(0xeadfb4), classed);
+  classed = pal.equal(3.0).select(color(0xd9b97e), classed);
+  classed = pal.equal(4.0).select(color(0xe0b3a5), classed);
+  classed = pal.equal(5.0).select(color(0xc77b57), classed);
+  classed = pal.equal(7.0).select(color(0xa9a8a3), classed);
+  classed = pal.equal(9.0).select(color(0x5c4a3c), classed);
+  const bricks = floor(vec2(facadeUV.x.mul(4.5).add(floor(facadeUV.y.mul(14.0)).mul(0.5)), facadeUV.y.mul(14.0)));
+  const brickWall = mix(mix(color(0xa4573d), color(0x8a4632), hash(bricks.add(seed.mul(9.0)))), color(0xcfc5b4), max(smoothstep(0.88, 0.96, fract(facadeUV.y.mul(14.0))), smoothstep(0.9, 0.97, fract(facadeUV.x.mul(4.5).add(floor(facadeUV.y.mul(14.0)).mul(0.5)))).mul(0.8)).mul(0.6));
+  const stoneWall = mix(mix(color(0xb5aa92), color(0x948a76), hash(floor(vec2(facadeUV.x.mul(2.4), facadeUV.y.mul(5.5))).add(seed.mul(17.0)))), color(0x7f7563), max(smoothstep(0.9, 0.97, fract(facadeUV.x.mul(2.4))), smoothstep(0.88, 0.96, fract(facadeUV.y.mul(5.5)))).mul(0.6));
+  classed = mix(classed, brickWall, flag(pal.equal(6.0)));
+  classed = mix(classed, stoneWall, flag(pal.equal(8.0)));
+  plaster = mix(plaster, classed.mul(float(0.94).add(seed.mul(0.12))), hasPal);
   // Outbuildings (sheds, tanks, construction, ruins) are plainer and greyer; greenhouses read as glass
   const outbuilding = max(max(flag(kind.equal(1.0)), flag(kind.equal(5.0))), max(flag(kind.equal(4.0)), flag(kind.equal(6.0))));
   plaster = mix(plaster, color(0xb4afa4), outbuilding.mul(0.7));
   plaster = mix(plaster, color(0xa9c4c8), flag(kind.equal(7.0)).mul(0.8));
   // Old houses (before 1950) are warmer and rougher, recent ones (1990 on) whiter; farm buildings and industry are plain concrete, shops and
   // public buildings light
-  plaster = mix(plaster, color(0xcdb68e), flag(era.equal(1.0)).mul(0.4));
-  plaster = mix(plaster, color(0xf1ede5), flag(era.equal(3.0)).mul(0.3));
+  plaster = mix(plaster, color(0xcdb68e), flag(era.equal(1.0)).mul(0.4).mul(float(1.0).sub(hasPal)));
+  plaster = mix(plaster, color(0xf1ede5), flag(era.equal(3.0)).mul(0.3).mul(float(1.0).sub(hasPal)));
   plaster = mix(plaster, color(0xb9b6ad), flag(useCode.equal(1.0)).mul(0.75));
   plaster = mix(plaster, color(0xa4a9ad), flag(useCode.equal(2.0)).mul(0.8));
   plaster = mix(plaster, color(0xf1ebdf), max(flag(useCode.equal(3.0)), flag(useCode.equal(4.0))).mul(0.6));
