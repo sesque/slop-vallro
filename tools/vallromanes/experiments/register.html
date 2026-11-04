@@ -1,0 +1,80 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Register screenshots</title>
+<style>
+  body { margin: 0; font: 13px system-ui; background: #1b1b1b; color: #ddd; }
+  #bar { padding: 6px 10px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  #panes { display: flex; gap: 4px; }
+  canvas { background: #fff; width: 50vw; height: calc(100vh - 150px); cursor: crosshair; display: block; }
+  #list { padding: 4px 10px; font-family: monospace; font-size: 12px; max-height: 70px; overflow: auto; }
+  button, select { font: inherit; }
+  b { color: #ffd54a; }
+</style>
+<div id="bar">
+  <select id="view"></select>
+  <span id="status"></span>
+  <button id="undo">Undo last</button> <button id="save">Save</button>
+  <span>Image: wheel zoom, drag pan, <b>click</b> a roof corner. Map: click the SAME corner (snaps to a footprint vertex). Wheel/drag work too. Aim for 8+ spread pairs per view, including the corners of the image.</span>
+</div>
+<div id="panes"><canvas id="img"></canvas><canvas id="map"></canvas></div>
+<div id="list"></div>
+<script>
+const VIEWS = ['center', ...'NESW'.split('').flatMap((d) => [1, 2, 3, 4, 5].map((i) => d + i))];
+const sel = document.getElementById('view');
+for (const v of VIEWS) sel.add(new Option(v, v));
+let scene, image, pairs = {}, pending = null, hot = null;
+const KEY = 'pairs:' + (new URLSearchParams(location.search).get('dir') || 'screenshots');
+try { pairs = JSON.parse(localStorage[KEY] || '{}'); } catch {}
+
+class View { // pan and zoom of one canvas
+  constructor(canvas, s, ox, oy) { this.c = canvas; this.s = s; this.ox = ox; this.oy = oy; this.drag = null; this.moved = false; this.onclick = null;
+    canvas.addEventListener('wheel', (e) => { e.preventDefault(); const p = this.at(e), k = Math.exp(-e.deltaY * 0.0015); this.s *= k; this.ox = p.px - (p.px - this.ox) * k; this.oy = p.py - (p.py - this.oy) * k; draw(); }, { passive: false });
+    canvas.addEventListener('mousedown', (e) => { this.drag = { x: e.clientX, y: e.clientY, ox: this.ox, oy: this.oy }; this.moved = false; });
+    addEventListener('mouseup', (e) => { if (this.drag && !this.moved && e.target === canvas && this.onclick) this.onclick(this.at(e)); this.drag = null; });
+    addEventListener('mousemove', (e) => { if (this.drag) { const dx = e.clientX - this.drag.x, dy = e.clientY - this.drag.y; if (Math.abs(dx) + Math.abs(dy) > 3) this.moved = true; if (this.moved) { this.ox = this.drag.ox + dx * this.k(); this.oy = this.drag.oy + dy * this.k(); draw(); } } });
+  }
+  k() { return this.c.width / this.c.getBoundingClientRect().width; }
+  at(e) { const r = this.c.getBoundingClientRect(), k = this.k(); const px = (e.clientX - r.left) * k, py = (e.clientY - r.top) * k; return { px, py, x: (px - this.ox) / this.s, y: (py - this.oy) / this.s }; }
+  to(x, y) { return [x * this.s + this.ox, y * this.s + this.oy]; }
+}
+const ic = document.getElementById('img'), mc = document.getElementById('map');
+for (const c of [ic, mc]) { c.width = 1200; c.height = 900; }
+const iv = new View(ic, 0.75, 0, 0), mv = new View(mc, 2, 600 - 100 * 2, 450 + 100 * 2); // map: x east, z south (px = x*s)
+
+const cur = () => (pairs[sel.value] ||= []);
+function draw() {
+  const g = ic.getContext('2d'); g.clearRect(0, 0, ic.width, ic.height);
+  if (image) g.drawImage(image, iv.ox, iv.oy, 1600 * iv.s, 1000 * iv.s);
+  cur().forEach((p, i) => mark(g, iv.to(p.u, p.v), String(i + 1), '#0f0'));
+  if (pending) mark(g, iv.to(pending.u, pending.v), '?', '#f33');
+  const m = mc.getContext('2d'); m.clearRect(0, 0, mc.width, mc.height);
+  if (!scene) return;
+  for (const b of scene) {
+    const r = b.ring; if (!b.px) continue;
+    m.beginPath(); for (let i = 0; i < r.length; i += 2) { const [x, y] = mv.to(r[i], r[i + 1]); i ? m.lineTo(x, y) : m.moveTo(x, y); } m.closePath();
+    m.fillStyle = b.kind === 0 ? '#f6c9b4' : '#c9c9f0'; m.fill(); m.strokeStyle = '#555'; m.lineWidth = 1; m.stroke();
+  }
+  for (const [name, x, z] of [['church', 49, -11], ['town hall', 11, -4], ['Can Poal', 79, -3]]) { const [x2, y2] = mv.to(x, z); m.fillStyle = '#a00'; m.font = '14px system-ui'; m.fillText('● ' + name, x2, y2); }
+  cur().forEach((p, i) => mark(m, mv.to(p.x, p.z), String(i + 1), '#0a0'));
+  if (hot) { const [x, y] = mv.to(hot.x, hot.z); m.strokeStyle = '#f33'; m.lineWidth = 2; m.strokeRect(x - 6, y - 6, 12, 12); }
+  document.getElementById('status').textContent = `${sel.value}: ${cur().length} pairs` + (pending ? ' — now click the matching corner on the map' : '');
+  document.getElementById('list').textContent = cur().map((p, i) => `${i + 1}: image (${p.u | 0},${p.v | 0}) ↔ x ${p.x.toFixed(1)} z ${p.z.toFixed(1)} y ${p.y.toFixed(1)} [${p.id}]`).join('\n');
+}
+function mark(g, [x, y], t, col) { g.strokeStyle = col; g.fillStyle = col; g.lineWidth = 2; g.beginPath(); g.moveTo(x - 8, y); g.lineTo(x + 8, y); g.moveTo(x, y - 8); g.lineTo(x, y + 8); g.stroke(); g.font = 'bold 15px system-ui'; g.fillText(t, x + 9, y - 6); }
+
+iv.onclick = (p) => { if (p.x < 0 || p.y < 0 || p.x > 1600 || p.y > 1000) return; pending = { u: p.x, v: p.y }; draw(); };
+mv.onclick = (p) => {
+  if (!pending) return;
+  let best = null, bd = (12 / mv.s) ** 2;
+  for (const b of scene) { if (!b.px) continue; for (let i = 0; i < b.ring.length; i += 2) { const d = (b.ring[i] - p.x) ** 2 + (b.ring[i + 1] - p.y) ** 2; if (d < bd) { bd = d; best = { x: b.ring[i], z: b.ring[i + 1], y: b.top, id: b.id }; } } }
+  if (!best) return;
+  cur().push({ ...pending, ...best }); pending = null; persist(); draw();
+};
+mc.addEventListener('mousemove', (e) => { if (!pending || !scene) return; const p = mv.at(e); let best = null, bd = (12 / mv.s) ** 2; for (const b of scene) for (let i = 0; i < b.ring.length; i += 2) { const d = (b.ring[i] - p.x) ** 2 + (b.ring[i + 1] - p.y) ** 2; if (d < bd) { bd = d; best = { x: b.ring[i], z: b.ring[i + 1] }; } } hot = best; draw(); });
+function persist() { try { localStorage[KEY] = JSON.stringify(pairs); } catch {} }
+document.getElementById('undo').onclick = () => { if (pending) pending = null; else cur().pop(); persist(); draw(); };
+document.getElementById('save').onclick = async () => { const r = await fetch('/save?dir=' + (new URLSearchParams(location.search).get('dir') || 'screenshots'), { method: 'POST', body: JSON.stringify(pairs) }); document.getElementById('status').textContent = r.ok ? 'saved' : 'save failed'; };
+function load() { image = null; const im = new Image(); im.onload = () => { image = im; draw(); }; im.src = `${new URLSearchParams(location.search).get('dir') || 'screenshots'}/view_${sel.value}.png`; pending = null; iv.s = 0.75; iv.ox = iv.oy = 0; }
+sel.onchange = () => { load(); draw(); };
+fetch('scene.json').then((r) => r.json()).then((j) => { scene = j.buildings; for (const b of scene) b.px = b.ring.some((v, i) => i % 2 === 0 ? v > -700 && v < 900 : v > -900 && v < 700); load(); draw(); });
+</script>
